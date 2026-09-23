@@ -7,10 +7,11 @@ import {
   Sparkles,
   Settings,
   HelpCircle,
-  CheckCircle2,
-  ExternalLink,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { ActiveTab, ConfiguracaoEmpresa } from '../types';
+import { useTheme } from '../context/ThemeContext';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -27,7 +28,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenTutorial,
   pendentesCount,
 }) => {
+  const { theme, toggleTheme, isDark } = useTheme();
+
   const menuItems = [
+
     {
       id: 'dashboard' as ActiveTab,
       label: 'Visão Geral',
@@ -117,6 +121,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Bottom Footer Actions */}
       <div className="mt-auto pt-4 border-t border-slate-800 space-y-1">
+        {/* Quick Theme Switcher Button */}
+        <button
+          onClick={toggleTheme}
+          title={isDark ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
+          className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition-colors group cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            {isDark ? (
+              <Sun className="w-4 h-4 text-amber-400 group-hover:rotate-45 transition-transform" />
+            ) : (
+              <Moon className="w-4 h-4 text-slate-400 group-hover:text-slate-200" />
+            )}
+            <span>{isDark ? 'Modo Claro' : 'Modo Escuro'}</span>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-800 text-slate-400 border border-slate-700/60">
+            {isDark ? 'Escuro 🌙' : 'Claro ☀️'}
+          </span>
+        </button>
+
         <button
           onClick={onOpenConfig}
           className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
@@ -127,10 +150,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <button
           onClick={onOpenTutorial}
-          className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition-colors group cursor-pointer"
         >
-          <HelpCircle className="w-4 h-4" />
-          <span>Dicas de Fechamento</span>
+          <HelpCircle className="w-4 h-4 text-emerald-400 group-hover:text-emerald-300" />
+          <span>Tutorial & Guia FechaZap</span>
         </button>
       </div>
     </aside>

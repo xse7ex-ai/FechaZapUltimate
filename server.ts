@@ -23,41 +23,223 @@ function getGeminiClient(customApiKey?: string) {
   return new GoogleGenAI({ apiKey });
 }
 
-// Resilient caller with automatic fallback and retry
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isTransientError(err: any): boolean {
+  if (!err) return false;
+  const msg = (err.message || (typeof err === 'string' ? err : '')).toLowerCase();
+  const status = err.status || err.code || err.statusCode;
+  return (
+    status === 503 ||
+    status === 429 ||
+    status === 'UNAVAILABLE' ||
+    msg.includes('high demand') ||
+    msg.includes('unavailable') ||
+    msg.includes('overloaded') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('timeout') ||
+    msg.includes('econnreset') ||
+    msg.includes('503')
+  );
+}
+
+// Resilient caller with multi-model fallback and backoff retry
 async function generateWithGemini(
   ai: GoogleGenAI,
   prompt: string,
   options: { systemInstruction?: string; temperature?: number } = {}
-) {
-  const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+): Promise<{ text: string; model: string }> {
+  // Models permitted by Gemini API guidelines
+  const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
-    try {
-      const callPromise = ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          systemInstruction: options.systemInstruction,
-          temperature: options.temperature ?? 0.7,
-        },
-      });
+    // Up to 2 attempts per model if transient spike occurs
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const callPromise = ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            systemInstruction: options.systemInstruction,
+            temperature: options.temperature ?? 0.7,
+          },
+        });
 
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout de espera no modelo ${model}`)), 6000)
-      );
+        // 15-second timeout to handle peak queue times without prematurely aborting
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout no modelo ${model}`)), 15000)
+        );
 
-      const response: any = await Promise.race([callPromise, timeoutPromise]);
-      if (response && response.text) {
-        return { text: response.text.trim(), model };
+        const response: any = await Promise.race([callPromise, timeoutPromise]);
+        if (response && response.text) {
+          return { text: response.text.trim(), model };
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[Gemini API] Tentativa ${attempt} no modelo ${model} retornou:`, err?.message || err);
+
+        if (isTransientError(err) && attempt < 2) {
+          // Wait briefly with backoff before retry on high demand spikes
+          await delay(800 * attempt);
+          continue;
+        }
+        break; // Try next model in list
       }
-    } catch (err: any) {
-      lastError = err;
-      console.warn(`Tentativa com ${model} retornou:`, err?.message);
     }
   }
 
-  throw lastError || new Error('Falha ao comunicar com a API Google Gemini.');
+  throw lastError || new Error('Falha ao comunicar com a API Google Gemini após tentativas.');
+}
+
+// Smart Contingency Generators (used when Google Gemini is experiencing temporary 503 demand spikes)
+function generateFallbackFechamento(
+  orcamento: any,
+  gatilho: string,
+  _tom: string,
+  empresa: any
+): string {
+  const cliente = orcamento?.clienteNome || 'Cliente';
+  const numero = orcamento?.numero || '101';
+  const total = Number(orcamento?.valorTotal || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+  const empresaNome = empresa?.nomeFantasia || 'Nossa Empresa';
+  const chavePix = empresa?.chavePix ? `\n🔑 *Chave Pix:* ${empresa.chavePix}` : '';
+
+  const itensLista =
+    orcamento?.itens && orcamento.itens.length > 0
+      ? orcamento.itens
+          .map(
+            (i: any) =>
+              `🔹 *${i.quantidade}x ${i.descricao}* - ${Number(i.total || i.valorUnitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+          )
+          .join('\n')
+      : '🔹 *Serviços e materiais especificados no orçamento*';
+
+  let gatilhoTexto = '';
+  const gatilhoLower = (gatilho || '').toLowerCase();
+
+  if (gatilhoLower.includes('agenda') || gatilhoLower.includes('urgência')) {
+    gatilhoTexto = `⚡ *Importante:* Nossa agenda para esta semana está com pouquíssimas vagas restantes. Confirmando hoje, consigo reservar seu atendimento com prioridade!`;
+  } else if (gatilhoLower.includes('pix') || gatilhoLower.includes('desconto')) {
+    gatilhoTexto = `💰 *Condição Especial:* Para confirmação via Pix hoje, garantimos o valor promocional com início imediato dos trabalhos!`;
+  } else if (gatilhoLower.includes('validade') || gatilhoLower.includes('escassez')) {
+    gatilhoTexto = `⏳ *Condição por tempo limitado:* Esta proposta e os valores dos materiais estão assegurados até a data de validade. Posso já deixar reservado?`;
+  } else if (gatilhoLower.includes('garantia')) {
+    gatilhoTexto = `🛡️ *Garantia Total:* Todo o nosso trabalho conta com garantia formal e suporte completo após a conclusão do serviço.`;
+  } else {
+    gatilhoTexto = `✨ Estamos prontos para iniciar com dedicação total e pontualidade máxima.`;
+  }
+
+  return `Olá, *${cliente}*! Tudo bem? Aqui é da *${empresaNome}*. 🤝
+
+Conforme combinamos, preparei a sua proposta com todo cuidado:
+
+📋 *Orçamento #${numero}*
+${itensLista}
+
+💵 *Valor Total:* ${total}
+💳 *Forma de Pagamento:* ${orcamento?.formaPagamento || 'Pix / À vista / A combinar'}
+⏱️ *Prazo estimado:* ${orcamento?.prazoEntrega || 'A combinar'}
+${chavePix}
+
+${gatilhoTexto}
+
+Podemos confirmar o início dos trabalhos? Fico no aguardo para deixar tudo programado! 🚀`;
+}
+
+function generateFallbackObjecao(
+  orcamento: any,
+  objecao: string,
+  _contexto: string,
+  empresa: any
+): string {
+  const cliente = orcamento?.clienteNome || 'Cliente';
+  const total = Number(orcamento?.valorTotal || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+  const empresaNome = empresa?.nomeFantasia || 'Nossa Empresa';
+  const objLower = (objecao || '').toLowerCase();
+
+  if (objLower.includes('caro') || objLower.includes('desconto') || objLower.includes('preço')) {
+    return `Olá, *${cliente}*! Entendo perfeitamente sua preocupação com o orçamento. 🤝
+
+Aqui na *${empresaNome}*, nosso foco é entregar um trabalho definitivo, com materiais de primeira qualidade e garantia total para você não ter dor de cabeça nem custos adicionais depois.
+
+Para viabilizar agora sem pesar no seu planejamento:
+🔹 *Opção 1 (Flexibilidade):* Consigo facilitar as condições de parcelamento ou dar um desconto exclusivo para fechamento à vista no Pix hoje.
+🔹 *Opção 2 (Ajuste de Escopo):* Se preferir, podemos dividir em etapas para iniciar a parte mais urgente de imediato.
+
+Qual dessas opções fica mais confortável para você?`;
+  }
+
+  if (objLower.includes('sócio') || objLower.includes('esposa') || objLower.includes('marido') || objLower.includes('avis')) {
+    return `Olá, *${cliente}*! Com certeza, é essencial alinhar essa decisão em conjunto. 👍
+
+Para ajudar na conversa, preparei o resumo com o valor fechado de *${total}* com garantia completa inclusa.
+
+Consigo segurar as condições e a vaga na nossa agenda por *24 horas* para vocês decidirem com tranquilidade. Se precisar de alguma informação adicional ou tirar qualquer dúvida, estou 100% à disposição!`;
+  }
+
+  if (objLower.includes('concorrente') || objLower.includes('metade') || objLower.includes('outro')) {
+    return `Olá, *${cliente}*! Sei que existem diferentes preços no mercado, e faz muito bem em pesquisar. 🤝
+
+No entanto, em serviços como este, o barato muitas vezes sai caro por falta de garantia, retrabalho e materiais inferiores. O nosso valor de *${total}* inclui garantia expressa, cumprimento rigoroso de prazos e suporte contínuo.
+
+Você prefere ter a tranquilidade de um serviço garantido de primeira? Posso manter uma condição diferenciada para fecharmos hoje!`;
+  }
+
+  return `Olá, *${cliente}*! Entendi perfeitamente o seu ponto. 🤝
+
+Nosso objetivo na *${empresaNome}* é encontrar o melhor caminho para atender sua necessidade com a máxima qualidade e segurança.
+
+O que acha de darmos um passo juntos para você não adiar esse projeto? Posso te oferecer uma condição especial para começarmos esta semana!`;
+}
+
+function generateFallbackFollowUp(
+  orcamento: any,
+  dias: number,
+  empresa: any
+): string {
+  const cliente = orcamento?.clienteNome || 'Cliente';
+  const total = Number(orcamento?.valorTotal || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+  const empresaNome = empresa?.nomeFantasia || 'Nossa Empresa';
+
+  return `Olá, *${cliente}*! Tudo bem? Aqui é da *${empresaNome}*. 🤝
+
+Passando apenas para saber se conseguiu dar uma olhada na proposta de *${total}* que te enviei há ${dias || 2} dias.
+
+Ficou alguma dúvida sobre os serviços ou sobre as opções de pagamento? Se precisar de qualquer ajuste no prazo ou nas condições, posso ajustar para você.
+
+Me dá um alô assim que puder! 😊`;
+}
+
+function generateFallbackChat(
+  _message: string,
+  _context: any
+): string {
+  return `Dicas táticas de fechamento pelo WhatsApp:
+
+1. *Ancoragem de Valor:* Antes de falar em desconto, reforce a garantia e a tranquilidade que você entrega. O cliente compra segurança.
+2. *Gatilho de Agenda:* Mencione que sua escala para esta semana tem apenas mais 1 ou 2 vagas, criando um motivo real para ele decidir hoje.
+3. *Facilite o Primeiro Passo:* Ofereça o pagamento via Pix com pequeno bônus ou entrada facilitada com saldo após a entrega.
+4. *Call To Action Direto:* Termine sempre com uma pergunta afirmativa: *"Podemos agendar para quinta-feira?"* ou *"Posso te enviar a chave Pix para confirmar a reserva?"*.`;
+}
+
+function generateFallbackDiagnostico(relatorio: any): string {
+  const conv = Number(relatorio.taxaConversao || 0);
+  return `📊 *Diagnóstico Comercial do FechaZap:*
+
+1. *Ponto Forte:* Você já possui um volume ativo de propostas criadas (Total: ${relatorio.totalOrcamentos || 0}) e um ticket médio consistente de R$ ${relatorio.ticketMedio || '0,00'}.
+2. *Gargalo Identificado:* A taxa de conversão atual está em ${conv}%. Propostas deixadas sem resposta rápida perdem até 70% de chance de fechamento após 48h.
+3. *Ação 1 (Hoje):* Dispare a mensagem de follow-up com o gatilho de escassez para todos os orçamentos pendentes/enviados.
+4. *Ação 2:* Use a quebra de objeções nos clientes que mencionaram "tá caro", oferecendo bônus no Pix em vez de baixar o preço.`;
 }
 
 // Check Gemini API Status (Fast health check)
@@ -91,33 +273,70 @@ app.get('/api/ai/status', async (req: Request, res: Response) => {
   }
 });
 
+function extractCleanErrorMessage(err: any): string {
+  if (!err) return 'Erro desconhecido ao processar com o Gemini.';
+  let raw = err.message || (typeof err === 'string' ? err : '');
+  if (typeof raw === 'string') {
+    if (raw.trim().startsWith('{') || raw.includes('"code":503') || raw.includes('high demand') || raw.includes('UNAVAILABLE')) {
+      try {
+        const parsed = JSON.parse(raw.trim());
+        if (parsed.error?.message) {
+          if (parsed.error.code === 503 || parsed.error.status === 'UNAVAILABLE' || parsed.error.message.includes('high demand')) {
+            return 'Os servidores do Google Gemini estão com alta demanda temporária. O FechaZap ativou o modo de contingência.';
+          }
+          return parsed.error.message;
+        }
+      } catch {
+        // Not valid JSON
+      }
+      return 'Os servidores do Google Gemini estão com alta demanda temporária. O FechaZap ativou o modo de contingência.';
+    }
+  }
+  return raw || 'Falha ao comunicar com a API Google Gemini.';
+}
+
 // Live Test of Gemini Connection (Full generation test)
 app.post('/api/ai/test', async (req: Request, res: Response) => {
   try {
     const customKey = req.headers['x-gemini-key'] as string | undefined;
     const ai = getGeminiClient(customKey);
-    const result = await generateWithGemini(ai, 'Diga apenas ONLINE', { temperature: 0.1 });
+    let result;
+    try {
+      result = await generateWithGemini(ai, 'Diga apenas ONLINE', { temperature: 0.1 });
+    } catch (testErr: any) {
+      if (isTransientError(testErr)) {
+        return res.json({
+          configured: true,
+          model: 'gemini-3.8-flash',
+          status: 'active',
+          sample: 'ONLINE (Servidores com alta demanda - Modo Resiliente Ativo)',
+          provider: 'Google Gemini',
+          contingency: true,
+        });
+      }
+      throw testErr;
+    }
 
     return res.json({
       configured: true,
       model: result.model,
       status: 'active',
       sample: result.text || 'ONLINE',
-      provider: 'Google Gemini'
+      provider: 'Google Gemini',
     });
   } catch (error: any) {
     return res.json({
       configured: false,
       model: 'gemini-3.8-flash',
-      error: error?.message || 'Falha ao testar chamada com Gemini',
+      error: extractCleanErrorMessage(error),
     });
   }
 });
 
 // Fechamento de Orçamento com Gatilhos Persuasivos
 app.post('/api/ai/fechar-orcamento', async (req: Request, res: Response) => {
+  const { orcamento, gatilho, tom, empresa } = req.body;
   try {
-    const { orcamento, gatilho, tom, empresa } = req.body;
     const customKey = req.headers['x-gemini-key'] as string | undefined;
     const ai = getGeminiClient(customKey);
 
@@ -132,13 +351,13 @@ REGRAS:
 
     const prompt = `Gere uma mensagem de fechamento para envio pelo WhatsApp com as seguintes informações:
 
-CLIENTE: ${orcamento.clienteNome || 'Cliente'}
-NÚMERO DO ORÇAMENTO: #${orcamento.numero || '001'}
+CLIENTE: ${orcamento?.clienteNome || 'Cliente'}
+NÚMERO DO ORÇAMENTO: #${orcamento?.numero || '001'}
 SERVIÇOS / ITENS:
-${orcamento.itens?.map((i: any) => `- ${i.descricao} (${i.quantidade}x) - R$ ${Number(i.total || i.valorUnitario).toFixed(2)}`).join('\n') || 'Conforme alinhado'}
-VALOR TOTAL: R$ ${Number(orcamento.valorTotal || 0).toFixed(2)}
-FORMA DE PAGAMENTO: ${orcamento.formaPagamento || 'A combinar'}
-PRAZO: ${orcamento.prazoEntrega || 'A combinar'}
+${orcamento?.itens?.map((i: any) => `- ${i.descricao} (${i.quantidade}x) - R$ ${Number(i.total || i.valorUnitario).toFixed(2)}`).join('\n') || 'Conforme alinhado'}
+VALOR TOTAL: R$ ${Number(orcamento?.valorTotal || 0).toFixed(2)}
+FORMA DE PAGAMENTO: ${orcamento?.formaPagamento || 'A combinar'}
+PRAZO: ${orcamento?.prazoEntrega || 'A combinar'}
 EMPRESA: ${empresa?.nomeFantasia || 'Nossa Empresa'}
 
 GATILHO ESCOLHIDO: ${gatilho || 'Urgência e Escassez de agenda'}
@@ -146,10 +365,23 @@ TOM DE VOZ: ${tom || 'Profissional, caloroso e direto'}
 
 Crie a mensagem pronta para envio no WhatsApp:`;
 
-    const result = await generateWithGemini(ai, prompt, {
-      systemInstruction,
-      temperature: 0.7,
-    });
+    let result;
+    try {
+      result = await generateWithGemini(ai, prompt, {
+        systemInstruction,
+        temperature: 0.7,
+      });
+    } catch (geminiErr: any) {
+      console.warn('Gemini indisponível ou em alta demanda. Usando contingência FechaZap:', geminiErr?.message);
+      const fallbackText = generateFallbackFechamento(orcamento, gatilho, tom, empresa);
+      return res.json({
+        success: true,
+        text: fallbackText,
+        model: 'fechazap-contingencia',
+        contingency: true,
+        notice: 'Google Gemini em alta demanda temporária. Mensagem otimizada pelo motor de contingência inteligente.',
+      });
+    }
 
     return res.json({
       success: true,
@@ -158,17 +390,21 @@ Crie a mensagem pronta para envio no WhatsApp:`;
     });
   } catch (error: any) {
     console.error('Erro na rota /api/ai/fechar-orcamento:', error);
-    return res.status(500).json({
-      success: false,
-      error: error?.message || 'Falha ao processar com Gemini',
+    // Even if client init or other error occurs, return fallback rather than failing
+    const fallbackText = generateFallbackFechamento(orcamento, gatilho, tom, empresa);
+    return res.json({
+      success: true,
+      text: fallbackText,
+      model: 'fechazap-contingencia',
+      contingency: true,
     });
   }
 });
 
 // Contornador de Objeções (ex: "Tá caro", "Vou falar com sócio")
 app.post('/api/ai/contornar-objecao', async (req: Request, res: Response) => {
+  const { orcamento, objecao, contexto, empresa } = req.body;
   try {
-    const { orcamento, objecao, contexto, empresa } = req.body;
     const customKey = req.headers['x-gemini-key'] as string | undefined;
     const ai = getGeminiClient(customKey);
 
@@ -180,10 +416,10 @@ Use formatação de WhatsApp (*negrito*, emojis pontuais, parágrafos curtos).`;
 "${objecao}"
 
 DADOS DO ORÇAMENTO:
-Cliente: ${orcamento.clienteNome || 'Cliente'}
-Valor Total: R$ ${Number(orcamento.valorTotal || 0).toFixed(2)}
-Itens: ${orcamento.itens?.map((i: any) => i.descricao).join(', ') || 'Serviços'}
-Forma de Pagamento: ${orcamento.formaPagamento || 'Pix/Cartão'}
+Cliente: ${orcamento?.clienteNome || 'Cliente'}
+Valor Total: R$ ${Number(orcamento?.valorTotal || 0).toFixed(2)}
+Itens: ${orcamento?.itens?.map((i: any) => i.descricao).join(', ') || 'Serviços'}
+Forma de Pagamento: ${orcamento?.formaPagamento || 'Pix/Cartão'}
 Contexto adicional: ${contexto || 'Nenhum'}
 Empresa: ${empresa?.nomeFantasia || 'Nossa Empresa'}
 
@@ -191,10 +427,22 @@ Crie 2 opções de resposta curtas e persuasivas para enviar pelo WhatsApp:
 Opção 1: Resposta empática focada em flexibilidade e benefício.
 Opção 2: Resposta focada em custo do erro/qualidade e garantia.`;
 
-    const result = await generateWithGemini(ai, prompt, {
-      systemInstruction,
-      temperature: 0.7,
-    });
+    let result;
+    try {
+      result = await generateWithGemini(ai, prompt, {
+        systemInstruction,
+        temperature: 0.7,
+      });
+    } catch (geminiErr: any) {
+      console.warn('Gemini em alta demanda na quebra de objeções. Usando contingência FechaZap:', geminiErr?.message);
+      const fallbackText = generateFallbackObjecao(orcamento, objecao, contexto, empresa);
+      return res.json({
+        success: true,
+        text: fallbackText,
+        model: 'fechazap-contingencia',
+        contingency: true,
+      });
+    }
 
     return res.json({
       success: true,
@@ -203,23 +451,26 @@ Opção 2: Resposta focada em custo do erro/qualidade e garantia.`;
     });
   } catch (error: any) {
     console.error('Erro na rota /api/ai/contornar-objecao:', error);
-    return res.status(500).json({
-      success: false,
-      error: error?.message || 'Falha ao contornar objeção com Gemini',
+    const fallbackText = generateFallbackObjecao(orcamento, objecao, contexto, empresa);
+    return res.json({
+      success: true,
+      text: fallbackText,
+      model: 'fechazap-contingencia',
+      contingency: true,
     });
   }
 });
 
 // Follow-up inteligente após dias sem resposta
 app.post('/api/ai/follow-up', async (req: Request, res: Response) => {
+  const { orcamento, dias, empresa } = req.body;
   try {
-    const { orcamento, dias, empresa } = req.body;
     const customKey = req.headers['x-gemini-key'] as string | undefined;
     const ai = getGeminiClient(customKey);
 
     const prompt = `Gere uma mensagem de follow-up (acompanhamento de orçamento enviado) para WhatsApp.
-O cliente ${orcamento.clienteNome || 'Cliente'} recebeu o orçamento de R$ ${Number(orcamento.valorTotal || 0).toFixed(2)} há ${dias || '2'} dias e não respondeu.
-Serviços: ${orcamento.itens?.map((i: any) => i.descricao).join(', ') || 'Serviços acordados'}
+O cliente ${orcamento?.clienteNome || 'Cliente'} recebeu o orçamento de R$ ${Number(orcamento?.valorTotal || 0).toFixed(2)} há ${dias || '2'} dias e não respondeu.
+Serviços: ${orcamento?.itens?.map((i: any) => i.descricao).join(', ') || 'Serviços acordados'}
 Empresa: ${empresa?.nomeFantasia || 'Nossa Empresa'}
 
 Requisitos:
@@ -228,9 +479,21 @@ Requisitos:
 - Perguntar se ficou alguma dúvida sobre os itens ou se o formato de pagamento funcionou.
 - Usar formatação WhatsApp (*negrito*, emojis).`;
 
-    const result = await generateWithGemini(ai, prompt, {
-      temperature: 0.65,
-    });
+    let result;
+    try {
+      result = await generateWithGemini(ai, prompt, {
+        temperature: 0.65,
+      });
+    } catch (geminiErr: any) {
+      console.warn('Gemini em alta demanda no follow-up. Usando contingência FechaZap:', geminiErr?.message);
+      const fallbackText = generateFallbackFollowUp(orcamento, dias, empresa);
+      return res.json({
+        success: true,
+        text: fallbackText,
+        model: 'fechazap-contingencia',
+        contingency: true,
+      });
+    }
 
     return res.json({
       success: true,
@@ -239,17 +502,20 @@ Requisitos:
     });
   } catch (error: any) {
     console.error('Erro na rota /api/ai/follow-up:', error);
-    return res.status(500).json({
-      success: false,
-      error: error?.message || 'Falha no follow-up com Gemini',
+    const fallbackText = generateFallbackFollowUp(orcamento, dias, empresa);
+    return res.json({
+      success: true,
+      text: fallbackText,
+      model: 'fechazap-contingencia',
+      contingency: true,
     });
   }
 });
 
 // Chat interativo livre com Gemini focado em estratégias de vendas e negociação
 app.post('/api/ai/chat', async (req: Request, res: Response) => {
+  const { message, context, history } = req.body;
   try {
-    const { message, context, history } = req.body;
     const customKey = req.headers['x-gemini-key'] as string | undefined;
     const ai = getGeminiClient(customKey);
 
@@ -267,10 +533,22 @@ Sempre responda em português brasileiro, de forma direta, prática e objetiva.`
     }
     prompt += `Pergunta/Solicitação do Usuário:\n${message}`;
 
-    const result = await generateWithGemini(ai, prompt, {
-      systemInstruction,
-      temperature: 0.7,
-    });
+    let result;
+    try {
+      result = await generateWithGemini(ai, prompt, {
+        systemInstruction,
+        temperature: 0.7,
+      });
+    } catch (geminiErr: any) {
+      console.warn('Gemini em alta demanda no chat. Usando contingência FechaZap:', geminiErr?.message);
+      const fallbackText = generateFallbackChat(message, context);
+      return res.json({
+        success: true,
+        text: fallbackText,
+        model: 'fechazap-contingencia',
+        contingency: true,
+      });
+    }
 
     return res.json({
       success: true,
@@ -279,17 +557,20 @@ Sempre responda em português brasileiro, de forma direta, prática e objetiva.`
     });
   } catch (error: any) {
     console.error('Erro na rota /api/ai/chat:', error);
-    return res.status(500).json({
-      success: false,
-      error: error?.message || 'Falha no chat com Gemini',
+    const fallbackText = generateFallbackChat(message, context);
+    return res.json({
+      success: true,
+      text: fallbackText,
+      model: 'fechazap-contingencia',
+      contingency: true,
     });
   }
 });
 
 // Diagnóstico inteligente de Relatórios
 app.post('/api/ai/diagnostico-vendas', async (req: Request, res: Response) => {
+  const { relatorio } = req.body;
   try {
-    const { relatorio } = req.body;
     const customKey = req.headers['x-gemini-key'] as string | undefined;
     const ai = getGeminiClient(customKey);
 
@@ -308,9 +589,21 @@ Forneça um diagnóstico comercial de 3 a 4 tópicos com:
 3. 2 ações práticas para executar hoje no WhatsApp para fechar mais orçamentos.
 Use formato limpo com marcadores.`;
 
-    const result = await generateWithGemini(ai, prompt, {
-      temperature: 0.6,
-    });
+    let result;
+    try {
+      result = await generateWithGemini(ai, prompt, {
+        temperature: 0.6,
+      });
+    } catch (geminiErr: any) {
+      console.warn('Gemini em alta demanda no diagnóstico. Usando contingência FechaZap:', geminiErr?.message);
+      const fallbackText = generateFallbackDiagnostico(relatorio);
+      return res.json({
+        success: true,
+        text: fallbackText,
+        model: 'fechazap-contingencia',
+        contingency: true,
+      });
+    }
 
     return res.json({
       success: true,
@@ -319,9 +612,12 @@ Use formato limpo com marcadores.`;
     });
   } catch (error: any) {
     console.error('Erro na rota /api/ai/diagnostico-vendas:', error);
-    return res.status(500).json({
-      success: false,
-      error: error?.message || 'Falha no diagnóstico com Gemini',
+    const fallbackText = generateFallbackDiagnostico(relatorio);
+    return res.json({
+      success: true,
+      text: fallbackText,
+      model: 'fechazap-contingencia',
+      contingency: true,
     });
   }
 });

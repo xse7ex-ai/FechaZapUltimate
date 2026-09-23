@@ -178,10 +178,10 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-slate-800 dark:text-slate-100">
         
         {/* Header */}
-        <div className="bg-slate-900 p-4 sm:p-5 text-white flex items-center justify-between shrink-0">
+        <div className="bg-slate-900 p-4 sm:p-5 text-white flex items-center justify-between shrink-0 border-b border-slate-800">
           <div>
             <h3 className="font-bold text-lg">
               {orcamentoToEdit ? `Editar Orçamento #${orcamentoToEdit.numero}` : `Novo Orçamento #${nextNumero}`}
@@ -192,7 +192,7 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -202,19 +202,19 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           
           {/* CLIENTE SECTION */}
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 1. Cliente Destinatário
               </span>
-              <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 text-xs">
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
                 <button
                   type="button"
                   onClick={() => setClienteMode('existente')}
-                  className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                  className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
                     clienteMode === 'existente'
                       ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   Cliente Cadastrado
@@ -222,10 +222,10 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                 <button
                   type="button"
                   onClick={() => setClienteMode('novo')}
-                  className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                  className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
                     clienteMode === 'novo'
                       ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   + Novo Cliente
@@ -238,10 +238,10 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                 <select
                   value={selectedClienteId}
                   onChange={(e) => setSelectedClienteId(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                  className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
                 >
                   {clientes.map((c) => (
-                    <option key={c.id} value={c.id}>
+                    <option key={c.id} value={c.id} className="dark:bg-slate-800">
                       {c.nome} - WhatsApp: {c.telefone} {c.cidade ? `(${c.cidade})` : ''}
                     </option>
                   ))}
@@ -250,7 +250,7 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     Nome Completo *
                   </label>
                   <input
@@ -259,11 +259,11 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                     placeholder="Ex: João da Silva"
                     value={novoNome}
                     onChange={(e) => setNovoNome(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                    className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     WhatsApp (com DDD) *
                   </label>
                   <input
@@ -272,11 +272,11 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                     placeholder="Ex: 11999998888"
                     value={novoTelefone}
                     onChange={(e) => setNovoTelefone(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                    className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     E-mail (opcional)
                   </label>
                   <input
@@ -284,11 +284,11 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                     placeholder="joao@email.com"
                     value={novoEmail}
                     onChange={(e) => setNovoEmail(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                    className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     Cidade / Região (opcional)
                   </label>
                   <input
@@ -296,7 +296,7 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                     placeholder="São Paulo - SP"
                     value={novaCidade}
                     onChange={(e) => setNovaCidade(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                    className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
               </div>
@@ -306,13 +306,13 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
           {/* ITENS SECTION */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 2. Serviços / Itens do Orçamento
               </span>
               <button
                 type="button"
                 onClick={handleAddItem}
-                className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 transition-colors"
+                className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Adicionar Item
@@ -323,10 +323,10 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
               {itens.map((item, index) => (
                 <div
                   key={item.id}
-                  className="p-3 bg-white border border-slate-200 rounded-xl grid grid-cols-12 gap-2.5 items-center shadow-xs"
+                  className="p-3 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700/80 rounded-xl grid grid-cols-12 gap-2.5 items-center shadow-xs"
                 >
                   <div className="col-span-12 sm:col-span-6">
-                    <label className="block text-[10px] font-semibold text-slate-500 mb-1">
+                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                       Descrição do Serviço / Produto #{index + 1}
                     </label>
                     <input
@@ -335,12 +335,12 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                       placeholder="Ex: Instalação de Ar Condicionado 12.000 BTUs..."
                       value={item.descricao}
                       onChange={(e) => handleItemChange(index, 'descricao', e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-750 focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
 
                   <div className="col-span-4 sm:col-span-2">
-                    <label className="block text-[10px] font-semibold text-slate-500 mb-1">
+                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                       Qtd
                     </label>
                     <input
@@ -348,12 +348,12 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                       min="1"
                       value={item.quantidade}
                       onChange={(e) => handleItemChange(index, 'quantidade', e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 text-center focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 text-center focus:bg-white dark:focus:bg-slate-750 focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
 
                   <div className="col-span-4 sm:col-span-2">
-                    <label className="block text-[10px] font-semibold text-slate-500 mb-1">
+                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                       Unitário (R$)
                     </label>
                     <input
@@ -362,15 +362,15 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                       min="0"
                       value={item.valorUnitario}
                       onChange={(e) => handleItemChange(index, 'valorUnitario', e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 text-right focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 text-right focus:bg-white dark:focus:bg-slate-750 focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
 
                   <div className="col-span-3 sm:col-span-1 text-right">
-                    <label className="block text-[10px] font-semibold text-slate-500 mb-1">
+                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                       Total
                     </label>
-                    <span className="font-bold text-xs text-slate-800">
+                    <span className="font-bold text-xs text-slate-800 dark:text-slate-200">
                       {formatCurrency(item.total)}
                     </span>
                   </div>
@@ -380,7 +380,7 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                       type="button"
                       onClick={() => handleRemoveItem(index)}
                       disabled={itens.length === 1}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-30 transition-colors"
+                      className="p-1.5 text-slate-400 hover:text-rose-600 disabled:opacity-30 transition-colors cursor-pointer"
                       title="Remover item"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -392,21 +392,21 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
           </div>
 
           {/* VALORES E DESCONTOS */}
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-4">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-4">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
               3. Descontos e Condições Comerciais
             </span>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   Desconto
                 </label>
                 <div className="flex">
                   <select
                     value={descontoTipo}
                     onChange={(e) => setDescontoTipo(e.target.value as any)}
-                    className="bg-white border border-r-0 border-slate-300 rounded-l-lg px-2 py-1.5 text-xs text-slate-700"
+                    className="bg-white dark:bg-slate-850 border border-r-0 border-slate-300 dark:border-slate-700 rounded-l-lg px-2 py-1.5 text-xs text-slate-700 dark:text-slate-300"
                   >
                     <option value="valor">R$ Fixo</option>
                     <option value="porcentagem">% Porcento</option>
@@ -417,25 +417,25 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                     step="0.01"
                     value={descontoValor}
                     onChange={(e) => setDescontoValor(Number(e.target.value))}
-                    className="w-full bg-white border border-slate-300 rounded-r-lg px-3 py-1.5 text-xs text-slate-800 text-right focus:ring-2 focus:ring-emerald-500"
+                    className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-r-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 text-right focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   Validade da Proposta
                 </label>
                 <input
                   type="date"
                   value={dataValidade}
                   onChange={(e) => setDataValidade(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                  className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   Prazo de Entrega / Início
                 </label>
                 <input
@@ -443,13 +443,13 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                   placeholder="Ex: 5 dias úteis"
                   value={prazoEntrega}
                   onChange={(e) => setPrazoEntrega(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                  className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 Condições de Pagamento
               </label>
               <input
@@ -457,12 +457,12 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                 placeholder="Ex: 50% entrada + 50% entrega, ou à vista no Pix com desconto"
                 value={formaPagamento}
                 onChange={(e) => setFormaPagamento(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                 Observações ou Escopo do Serviço (opcional)
               </label>
               <textarea
@@ -470,23 +470,23 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                 placeholder="Ex: Inclui material básico e limpeza após a execução."
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
               />
             </div>
 
             {/* Total Box */}
-            <div className="bg-white p-3.5 rounded-xl border border-slate-200 flex items-center justify-between">
-              <div className="text-xs text-slate-500">
-                Subtotal: <strong>{formatCurrency(subtotal)}</strong>
+            <div className="bg-white dark:bg-slate-850 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                Subtotal: <strong className="text-slate-800 dark:text-slate-200">{formatCurrency(subtotal)}</strong>
                 {descontoCalculado > 0 && (
-                  <span className="text-rose-600 ml-2">
+                  <span className="text-rose-600 dark:text-rose-400 ml-2">
                     - Desconto: {formatCurrency(descontoCalculado)}
                   </span>
                 )}
               </div>
               <div className="text-right">
-                <span className="text-xs text-slate-500 mr-2">Valor Total:</span>
-                <span className="text-lg font-extrabold text-emerald-600">
+                <span className="text-xs text-slate-500 dark:text-slate-400 mr-2">Valor Total:</span>
+                <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">
                   {formatCurrency(valorTotal)}
                 </span>
               </div>
@@ -498,13 +498,13 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/30 transition-all active:scale-95"
+              className="px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white dark:text-slate-950 shadow-md shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
             >
               Salvar Orçamento
             </button>

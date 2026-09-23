@@ -13,12 +13,14 @@ import {
 import { TrendingUp, DollarSign, Calendar, ArrowUpRight, BarChart2 } from 'lucide-react';
 import { Orcamento } from '../types';
 import { formatCurrency } from '../utils/format';
+import { useTheme } from '../context/ThemeContext';
 
 interface ReceitaAcumuladaChartProps {
   orcamentos: Orcamento[];
 }
 
 type ViewMode = 'acumulada' | 'mensal' | 'comparativo';
+
 
 interface MesData {
   mesKey: string;
@@ -41,8 +43,10 @@ const MONTH_NAMES_FULL = [
 
 export const ReceitaAcumuladaChart: React.FC<ReceitaAcumuladaChartProps> = ({ orcamentos }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('acumulada');
+  const { isDark } = useTheme();
 
   // Calcula os últimos 6 meses com base na data atual
+
   const chartData = useMemo<MesData[]>(() => {
     const now = new Date();
     const meses: MesData[] = [];
@@ -134,50 +138,50 @@ export const ReceitaAcumuladaChart: React.FC<ReceitaAcumuladaChartProps> = ({ or
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 sm:p-6 space-y-5">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-5 sm:p-6 space-y-5 transition-colors">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200 mb-1.5">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold border border-emerald-200 dark:border-emerald-800 mb-1.5">
             <BarChart2 className="w-3.5 h-3.5" />
             <span>Desempenho Comercial Semestral</span>
           </div>
-          <h3 className="font-black text-slate-900 text-base sm:text-lg tracking-tight">
+          <h3 className="font-black text-slate-900 dark:text-white text-base sm:text-lg tracking-tight">
             Receita Total Acumulada (Últimos 6 Meses)
           </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Progressão financeira dos orçamentos fechados e evolução mês a mês.
           </p>
         </div>
 
         {/* View Mode Buttons */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold self-start sm:self-auto">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold self-start sm:self-auto border border-slate-200/50 dark:border-slate-700/60">
           <button
             onClick={() => setViewMode('acumulada')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
               viewMode === 'acumulada'
-                ? 'bg-white text-slate-900 font-bold shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             Acumulada
           </button>
           <button
             onClick={() => setViewMode('mensal')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
               viewMode === 'mensal'
-                ? 'bg-white text-slate-900 font-bold shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             Mês a Mês
           </button>
           <button
             onClick={() => setViewMode('comparativo')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
               viewMode === 'comparativo'
-                ? 'bg-white text-slate-900 font-bold shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             Comparativo
@@ -187,44 +191,44 @@ export const ReceitaAcumuladaChart: React.FC<ReceitaAcumuladaChartProps> = ({ or
 
       {/* KPI Cards Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-        <div className="p-3.5 rounded-xl bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-200/80 flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-200/80 dark:border-emerald-850 dark:border-emerald-800/60 flex items-center justify-between">
           <div>
-            <span className="text-[11px] font-bold uppercase text-emerald-800 tracking-wider">
+            <span className="text-[11px] font-bold uppercase text-emerald-800 dark:text-emerald-400 tracking-wider">
               Total Acumulado (6M)
             </span>
-            <div className="text-lg sm:text-xl font-black text-emerald-950 mt-0.5">
+            <div className="text-lg sm:text-xl font-black text-emerald-950 dark:text-emerald-200 mt-0.5">
               {formatCurrency(totalPeriodo)}
             </div>
           </div>
-          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+          <div className="w-9 h-9 rounded-xl bg-emerald-600 dark:bg-emerald-500 text-white dark:text-slate-950 flex items-center justify-center shrink-0 shadow-xs">
             <DollarSign className="w-5 h-5" />
           </div>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between">
           <div>
-            <span className="text-[11px] font-bold uppercase text-slate-500 tracking-wider">
+            <span className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 tracking-wider">
               Média Mensal Fechada
             </span>
-            <div className="text-lg sm:text-xl font-black text-slate-900 mt-0.5">
+            <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-0.5">
               {formatCurrency(mediaMensal)}
             </div>
           </div>
-          <div className="w-9 h-9 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
             <Calendar className="w-4 h-4" />
           </div>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between">
           <div>
-            <span className="text-[11px] font-bold uppercase text-slate-500 tracking-wider">
+            <span className="text-[11px] font-bold uppercase text-slate-500 dark:text-slate-400 tracking-wider">
               Faturamento Último Mês
             </span>
-            <div className="text-lg sm:text-xl font-black text-slate-900 mt-0.5">
+            <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-0.5">
               {formatCurrency(ultimoMesReceita)}
             </div>
           </div>
-          <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-800/60 flex items-center justify-center shrink-0">
             <TrendingUp className="w-4 h-4" />
           </div>
         </div>
@@ -251,19 +255,23 @@ export const ReceitaAcumuladaChart: React.FC<ReceitaAcumuladaChartProps> = ({ or
               </linearGradient>
             </defs>
 
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <CartesianGrid
+              strokeDasharray="3 3"
+              vertical={false}
+              stroke={isDark ? '#334155' : '#f1f5f9'}
+            />
 
             <XAxis
               dataKey="mesLabel"
               tickLine={false}
-              axisLine={{ stroke: '#e2e8f0' }}
-              tick={{ fill: '#64748b', fontSize: 12, fontWeight: 500 }}
+              axisLine={{ stroke: isDark ? '#475569' : '#e2e8f0' }}
+              tick={{ fill: isDark ? '#94a3b8' : '#64748b', fontSize: 12, fontWeight: 500 }}
             />
 
             <YAxis
               tickLine={false}
               axisLine={false}
-              tick={{ fill: '#94a3b8', fontSize: 11 }}
+              tick={{ fill: isDark ? '#94a3b8' : '#94a3b8', fontSize: 11 }}
               tickFormatter={(value) => {
                 if (value >= 1000) {
                   return `R$ ${(value / 1000).toFixed(0)}k`;
@@ -273,7 +281,10 @@ export const ReceitaAcumuladaChart: React.FC<ReceitaAcumuladaChartProps> = ({ or
               width={65}
             />
 
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+            <Tooltip
+              content={<CustomTooltip />}
+              cursor={{ fill: isDark ? '#1e293b' : '#f8fafc' }}
+            />
 
             {viewMode === 'comparativo' && (
               <Legend
@@ -332,14 +343,14 @@ export const ReceitaAcumuladaChart: React.FC<ReceitaAcumuladaChartProps> = ({ or
       </div>
 
       {/* Chart Footer Insight */}
-      <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 gap-2">
+      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 dark:text-slate-400 gap-2">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
           <span>
             Gráfico atualizado em tempo real conforme propostas são aprovadas.
           </span>
         </div>
-        <span className="text-[11px] text-slate-400">
+        <span className="text-[11px] text-slate-400 dark:text-slate-500">
           * Considerando apenas orçamentos com status "Aprovado".
         </span>
       </div>

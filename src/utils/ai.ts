@@ -7,6 +7,28 @@ export interface GeminiStatusResult {
   sample?: string;
   error?: string;
   provider?: string;
+  contingency?: boolean;
+}
+
+export function parseAiError(errData: any): string {
+  if (!errData) return 'Erro ao comunicar com o serviço de IA.';
+  if (typeof errData === 'string') {
+    if (errData.includes('503') || errData.includes('high demand') || errData.includes('UNAVAILABLE')) {
+      return 'Os servidores do Google Gemini estão com alta demanda temporária. O FechaZap ativou o modo de contingência.';
+    }
+    try {
+      const parsed = JSON.parse(errData);
+      if (parsed.error?.message) {
+        return parsed.error.message;
+      }
+    } catch {
+      // not json
+    }
+    return errData;
+  }
+  if (errData.message) return parseAiError(errData.message);
+  if (errData.error) return parseAiError(errData.error);
+  return 'Erro ao processar com a IA.';
 }
 
 export async function checkGeminiStatus(customKey?: string): Promise<GeminiStatusResult> {
@@ -79,7 +101,7 @@ export async function gerarFechamentoGemini(
 
   const data = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error || 'Falha ao gerar copy com a API Gemini.');
+    throw new Error(parseAiError(data.error || 'Falha ao gerar copy com a API Gemini.'));
   }
 
   return data.text;
@@ -112,7 +134,7 @@ export async function contornarObjecaoGemini(
 
   const data = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error || 'Falha ao contornar objeção com a API Gemini.');
+    throw new Error(parseAiError(data.error || 'Falha ao contornar objeção com a API Gemini.'));
   }
 
   return data.text;
@@ -143,7 +165,7 @@ export async function gerarFollowUpGemini(
 
   const data = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error || 'Falha ao gerar follow-up com a API Gemini.');
+    throw new Error(parseAiError(data.error || 'Falha ao gerar follow-up com a API Gemini.'));
   }
 
   return data.text;
@@ -174,7 +196,7 @@ export async function chatComGemini(
 
   const data = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error || 'Falha na comunicação com a API Gemini.');
+    throw new Error(parseAiError(data.error || 'Falha na comunicação com a API Gemini.'));
   }
 
   return data.text;
@@ -201,7 +223,7 @@ export async function diagnosticoVendasGemini(
 
   const data = await res.json();
   if (!res.ok || !data.success) {
-    throw new Error(data.error || 'Falha ao gerar diagnóstico com a API Gemini.');
+    throw new Error(parseAiError(data.error || 'Falha ao gerar diagnóstico com a API Gemini.'));
   }
 
   return data.text;

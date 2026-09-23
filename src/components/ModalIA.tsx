@@ -211,7 +211,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-slate-800 dark:text-slate-100">
         
         {/* Header with Gemini Branding */}
         <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 p-4 sm:p-5 text-white flex items-center justify-between shrink-0 border-b border-slate-800">
@@ -227,29 +227,29 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Migrado de Claude para Gemini API • Fechamento persuasivo para WhatsApp
+                Google Gemini API • Fechamento persuasivo de alta conversão para WhatsApp
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Quote Context Selector */}
-        <div className="bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2 flex-1 min-w-[240px]">
-            <span className="font-semibold text-slate-700">Orçamento Contexto:</span>
+            <span className="font-semibold text-slate-700 dark:text-slate-300">Orçamento Contexto:</span>
             <select
               value={currentOrcamentoId}
               onChange={(e) => setCurrentOrcamentoId(e.target.value)}
-              className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 outline-none flex-1 max-w-sm"
+              className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 font-medium focus:ring-2 focus:ring-emerald-500 outline-none flex-1 max-w-sm"
             >
               {orcamentos.map((orc) => (
-                <option key={orc.id} value={orc.id}>
+                <option key={orc.id} value={orc.id} className="dark:bg-slate-800">
                   #{orc.numero} - {orc.clienteNome} ({formatCurrency(orc.valorTotal)})
                 </option>
               ))}
@@ -257,29 +257,29 @@ export const ModalIA: React.FC<ModalIAProps> = ({
           </div>
 
           {currentOrcamento && (
-            <div className="flex items-center gap-3 text-slate-600">
+            <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400">
               <span>
                 Status:{' '}
-                <strong className="capitalize text-emerald-700">
+                <strong className="capitalize text-emerald-700 dark:text-emerald-400">
                   {currentOrcamento.status}
                 </strong>
               </span>
               <span>
                 WhatsApp:{' '}
-                <strong>{currentOrcamento.clienteTelefone || 'Não informado'}</strong>
+                <strong className="dark:text-slate-200">{currentOrcamento.clienteTelefone || 'Não informado'}</strong>
               </span>
             </div>
           )}
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 bg-white px-4 shrink-0 overflow-x-auto">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 shrink-0 overflow-x-auto">
           <button
             onClick={() => setActiveTab('gatilhos')}
-            className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+            className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'gatilhos'
-                ? 'border-emerald-600 text-emerald-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
             }`}
           >
             <Flame className="w-4 h-4 text-amber-500" />
@@ -287,10 +287,10 @@ export const ModalIA: React.FC<ModalIAProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('objecoes')}
-            className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+            className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'objecoes'
-                ? 'border-emerald-600 text-emerald-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
             }`}
           >
             <ShieldCheck className="w-4 h-4 text-blue-500" />
@@ -298,10 +298,10 @@ export const ModalIA: React.FC<ModalIAProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('followup')}
-            className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+            className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'followup'
-                ? 'border-emerald-600 text-emerald-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
             }`}
           >
             <Clock className="w-4 h-4 text-purple-500" />
@@ -309,25 +309,25 @@ export const ModalIA: React.FC<ModalIAProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('chat')}
-            className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+            className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer ${
               activeTab === 'chat'
-                ? 'border-emerald-600 text-emerald-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
             }`}
           >
-            <Bot className="w-4 h-4 text-emerald-600" />
+            <Bot className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             Chat com Gemini
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/50 dark:bg-slate-900/60">
           
           {/* TAB 1: GATILHOS */}
           {activeTab === 'gatilhos' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
                   Selecione o Gatilho Mental para Fechar a Venda:
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
@@ -335,14 +335,14 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                     <button
                       key={g.id}
                       onClick={() => setSelectedGatilho(g.id)}
-                      className={`text-left p-3 rounded-xl border text-xs transition-all ${
+                      className={`text-left p-3 rounded-xl border text-xs transition-all cursor-pointer ${
                         selectedGatilho === g.id
-                          ? 'border-emerald-500 bg-emerald-50/70 shadow-sm ring-1 ring-emerald-500'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
+                          ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 shadow-sm ring-1 ring-emerald-500'
+                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
-                      <div className="font-bold text-slate-900 mb-1">{g.titulo}</div>
-                      <p className="text-slate-500 text-[11px] leading-relaxed">{g.descricao}</p>
+                      <div className="font-bold text-slate-900 dark:text-white mb-1">{g.titulo}</div>
+                      <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">{g.descricao}</p>
                     </button>
                   ))}
                 </div>
@@ -350,13 +350,13 @@ export const ModalIA: React.FC<ModalIAProps> = ({
 
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                     Tom de Voz da Mensagem:
                   </label>
                   <select
                     value={tomVoz}
                     onChange={(e) => setTomVoz(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500"
+                    className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="Profissional e caloroso">Profissional, caloroso e seguro</option>
                     <option value="Direto e objetivo">Direto ao ponto, focado em agilidade</option>
@@ -369,7 +369,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                   <button
                     onClick={handleGenerateFechamento}
                     disabled={loading}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-600/30 disabled:opacity-60 transition-all active:scale-95"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-600/30 disabled:opacity-60 transition-all active:scale-95 cursor-pointer"
                   >
                     <Sparkles className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                     <span>{loading ? 'Gerando com Gemini 3.8...' : 'Gerar Mensagem de Fechamento'}</span>
@@ -383,7 +383,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
           {activeTab === 'objecoes' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
                   Qual objeção o cliente apresentou?
                 </label>
                 <div className="space-y-2">
@@ -392,8 +392,8 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                       key={i}
                       className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-all ${
                         selectedObjecao === obj && !customObjecao
-                          ? 'border-emerald-500 bg-emerald-50/70 font-medium'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
+                          ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 font-medium'
+                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
                       <input
@@ -406,14 +406,14 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                         }}
                         className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
                       />
-                      <span className="text-slate-800 leading-snug">{obj}</span>
+                      <span className="text-slate-800 dark:text-slate-200 leading-snug">{obj}</span>
                     </label>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Ou digite a mensagem exata que o cliente mandou:
                 </label>
                 <input
@@ -421,7 +421,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                   placeholder="Ex: 'O concorrente X me fez por R$ 500 a menos com as mesmas peças...'"
                   value={customObjecao}
                   onChange={(e) => setCustomObjecao(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-emerald-500"
+                  className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
 
@@ -429,7 +429,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                 <button
                   onClick={handleContornarObjecao}
                   disabled={loading}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-600/30 disabled:opacity-60 transition-all active:scale-95"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-600/30 disabled:opacity-60 transition-all active:scale-95 cursor-pointer"
                 >
                   <Sparkles className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                   <span>{loading ? 'Consultando Gemini 3.8...' : 'Contornar Objeção com Gemini'}</span>
@@ -441,12 +441,12 @@ export const ModalIA: React.FC<ModalIAProps> = ({
           {/* TAB 3: FOLLOW-UP */}
           {activeTab === 'followup' && (
             <div className="space-y-4">
-              <p className="text-xs text-slate-600 leading-relaxed">
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                 Mais de 60% das vendas no WhatsApp fecham no <strong>follow-up</strong>, e não no primeiro contato. O Gemini gera uma abordagem leve que não parece cobrança chata.
               </p>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
                   Há quanto tempo o orçamento foi enviado?
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -459,14 +459,14 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                     <button
                       key={item.dias}
                       onClick={() => setDiasFollowUp(item.dias)}
-                      className={`p-3 rounded-xl border text-center transition-all ${
+                      className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
                         diasFollowUp === item.dias
-                          ? 'border-emerald-500 bg-emerald-50/80 shadow-sm ring-1 ring-emerald-500'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
+                          ? 'border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/40 shadow-sm ring-1 ring-emerald-500'
+                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
-                      <div className="text-xs font-bold text-slate-900">{item.label}</div>
-                      <div className="text-[10px] text-slate-500 mt-1">{item.desc}</div>
+                      <div className="text-xs font-bold text-slate-900 dark:text-white">{item.label}</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">{item.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -476,7 +476,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                 <button
                   onClick={handleGenerateFollowUp}
                   disabled={loading}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-600/30 disabled:opacity-60 transition-all active:scale-95"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-600/30 disabled:opacity-60 transition-all active:scale-95 cursor-pointer"
                 >
                   <Sparkles className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                   <span>{loading ? 'Escrevendo Follow-up...' : 'Criar Mensagem de Follow-up'}</span>
@@ -487,8 +487,8 @@ export const ModalIA: React.FC<ModalIAProps> = ({
 
           {/* TAB 4: CHAT LIVRE COM GEMINI */}
           {activeTab === 'chat' && (
-            <div className="flex flex-col h-[400px] border border-slate-200 rounded-xl bg-white overflow-hidden">
-              <div className="flex-1 overflow-y-auto p-3.5 space-y-3 bg-slate-50/30">
+            <div className="flex flex-col h-[400px] border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-850 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-3.5 space-y-3 bg-slate-50/30 dark:bg-slate-900/40">
                 {chatMessages.map((msg, idx) => (
                   <div
                     key={idx}
@@ -505,7 +505,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                       className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed whitespace-pre-line shadow-sm ${
                         msg.role === 'user'
                           ? 'bg-emerald-600 text-white rounded-tr-none'
-                          : 'bg-white text-slate-800 border border-slate-200 rounded-tl-none'
+                          : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-tl-none'
                       }`}
                     >
                       {msg.text}
@@ -518,26 +518,26 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                   </div>
                 ))}
                 {loading && (
-                  <div className="flex items-center gap-2 text-xs text-slate-500 italic p-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 italic p-2">
                     <Sparkles className="w-4 h-4 text-emerald-600 animate-spin" />
                     <span>Gemini 3.8 está digitando sugestão de venda...</span>
                   </div>
                 )}
               </div>
 
-              <div className="p-2.5 bg-white border-t border-slate-200 flex items-center gap-2">
+              <div className="p-2.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2">
                 <input
                   type="text"
                   placeholder="Pergunte ao Gemini: 'Como fechar esse cliente sem dar mais desconto?'..."
                   value={inputChat}
                   onChange={(e) => setInputChat(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendChatMessage()}
-                  className="flex-1 bg-slate-100 rounded-xl px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-750 focus:ring-2 focus:ring-emerald-500 outline-none"
                 />
                 <button
                   onClick={handleSendChatMessage}
                   disabled={loading || !inputChat.trim()}
-                  className="p-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm"
+                  className="p-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm cursor-pointer"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -547,21 +547,21 @@ export const ModalIA: React.FC<ModalIAProps> = ({
 
           {/* GENERATED TEXT AREA (FOR GATILHOS, OBJEÇÕES, FOLLOW-UP) */}
           {activeTab !== 'chat' && generatedText && (
-            <div className="mt-6 pt-5 border-t border-slate-200 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
                   <span>Mensagem Pronta para WhatsApp (Editável):</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleCopyText(generatedText)}
-                    className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-2.5 py-1 rounded-lg transition-colors shadow-sm"
+                    className="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg transition-colors shadow-sm cursor-pointer"
                   >
                     {copied ? (
                       <>
                         <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="text-emerald-700">Copiado!</span>
+                        <span className="text-emerald-700 dark:text-emerald-400">Copiado!</span>
                       </>
                     ) : (
                       <>
@@ -573,7 +573,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
 
                   <button
                     onClick={() => handleSendToWhatsApp(generatedText)}
-                    className="flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1 rounded-lg shadow-sm transition-all"
+                    className="flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1 rounded-lg shadow-sm transition-all cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>Enviar no WhatsApp</span>
@@ -585,9 +585,9 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                 value={generatedText}
                 onChange={(e) => setGeneratedText(e.target.value)}
                 rows={6}
-                className="w-full bg-white border border-slate-300 rounded-xl p-3.5 text-xs text-slate-800 font-mono leading-relaxed focus:ring-2 focus:ring-emerald-500 shadow-inner"
+                className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-3.5 text-xs text-slate-800 dark:text-slate-100 font-mono leading-relaxed focus:ring-2 focus:ring-emerald-500 shadow-inner"
               />
-              <p className="text-[11px] text-slate-400 mt-1">
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
                 *Dica: Você pode editar o texto acima antes de copiar ou enviar no WhatsApp. Os asteriscos (*texto*) viram negrito no WhatsApp.*
               </p>
             </div>
@@ -595,14 +595,14 @@ export const ModalIA: React.FC<ModalIAProps> = ({
         </div>
 
         {/* Footer info */}
-        <div className="bg-slate-100 border-t border-slate-200 px-4 py-3 flex items-center justify-between text-xs text-slate-500 shrink-0">
+        <div className="bg-slate-100 dark:bg-slate-850 border-t border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 shrink-0">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>Modelo: <strong>gemini-3.8-flash</strong> (Google Gen AI)</span>
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 font-semibold"
+            className="px-4 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold cursor-pointer"
           >
             Fechar
           </button>

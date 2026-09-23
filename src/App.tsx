@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Orcamento,
   Cliente,
@@ -29,7 +29,13 @@ import { ModalDetalhes } from './components/ModalDetalhes';
 import { ModalConfiguracoes } from './components/ModalConfiguracoes';
 import { TutorialModal } from './components/TutorialModal';
 import { Toast, ToastMessage } from './components/Toast';
+import { NotificationBanner } from './components/NotificationBanner';
 import { checkGeminiStatus } from './utils/ai';
+import {
+  getOrcamentosProximosValidade,
+  dispararNotificacaoNativa,
+  OrcamentoVencimentoInfo,
+} from './utils/validadeNotifications';
 
 export default function App() {
   // State with LocalStorage Persistence
@@ -111,22 +117,83 @@ export default function App() {
       });
   }, [empresa.geminiKeyCustom]);
 
+  // Exibe tutorial automaticamente no primeiro acesso da empresa/usuário
+  useEffect(() => {
+    try {
+      const hasSeenTutorial = localStorage.getItem('fechazap_has_seen_tutorial_v1');
+      if (!hasSeenTutorial) {
+        const timer = setTimeout(() => {
+          setIsTutorialOpen(true);
+        }, 800);
+        return () => clearTimeout(timer);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Identifica orçamentos próximos do vencimento (<= 3 dias)
+  const vencimentos = useMemo(
+    () => getOrcamentosProximosValidade(orcamentos, 3),
+    [orcamentos]
+  );
+
   const addToast = (
     title: string,
     description?: string,
-    type: 'success' | 'error' | 'info' = 'info'
+    type: 'success' | 'error' | 'info' | 'warning' = 'info',
+    action?: { label: string; onClick: () => void }
   ) => {
     const id = `toast-${Date.now()}-${Math.random()}`;
-    const newToast: ToastMessage = { id, title, description, type };
+    const newToast: ToastMessage = { id, title, description, type, action };
     setToasts((prev) => [...prev, newToast]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    }, 6000);
   };
 
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
+
+  // Sistema de Notificação Local: Alerta quando orçamentos estiverem próximos da data de validade
+  useEffect(() => {
+    if (vencimentos.length === 0) return;
+
+    const sessionAlertKey = 'fechazap_alert_validade_alerted';
+    const alreadyAlerted = sessionStorage.getItem(sessionAlertKey);
+
+    const maisUrgente = vencimentos[0];
+
+    // Dispara alerta na inicialização da sessão
+    if (!alreadyAlerted) {
+      sessionStorage.setItem(sessionAlertKey, 'true');
+
+      // Toast local de aviso com ação rápida
+      const timer = setTimeout(() => {
+        addToast(
+          '⚠️ Alerta de Validade!',
+          `Orçamento #${maisUrgente.orcamento.numero} de ${maisUrgente.orcamento.clienteNome} ${maisUrgente.textoVencimento.toLowerCase()}. Feche agora antes que expire!`,
+          'warning',
+          {
+            label: '⚡ Fechar com IA',
+            onClick: () => handleOpenIAForOrcamento(maisUrgente.orcamento.id),
+          }
+        );
+      }, 1000);
+
+      // Notificação nativa do sistema operacional (se ativada pelo usuário)
+      dispararNotificacaoNativa(
+        '⚡ FechaZap: Orçamento Próximo do Vencimento!',
+        `Orçamento #${maisUrgente.orcamento.numero} (${maisUrgente.orcamento.clienteNome}) ${maisUrgente.textoVencimento.toLowerCase()}. Clique para enviar mensagem persuasiva.`,
+        () => {
+          handleOpenIAForOrcamento(maisUrgente.orcamento.id);
+        }
+      );
+
+      return () => clearTimeout(timer);
+    }
+  }, [vencimentos]);
 
   // Status Updater
   const handleUpdateStatus = (orcamentoId: string, newStatus: StatusOrcamento) => {
@@ -233,17 +300,29 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-200">
       {/* Top Header */}
       <Topbar
         empresa={empresa}
         onOpenNovoOrcamento={handleOpenNovoOrcamento}
         onOpenIA={() => {
-          setSelectedOrcamentoIdForIA(orcamentos[0]?.id || '');
+          setSelectedOrcamentoIdForIA(vencimentos[0]?.orcamento.id || orcamentos[0]?.id || '');
           setIsIAOpen(true);
         }}
         onOpenConfig={() => setIsConfigOpen(true)}
+        onOpenTutorial={() => setIsTutorialOpen(true)}
         geminiOnline={geminiOnline}
+        vencimentos={vencimentos}
+        onOpenIAForOrcamento={handleOpenIAForOrcamento}
+        onViewOrcamento={handleViewOrcamento}
+        onShowToast={addToast}
+      />
+
+      {/* Local Notification Banner for Quotes Expiring Soon */}
+      <NotificationBanner
+        vencimentos={vencimentos}
+        onOpenIAForOrcamento={handleOpenIAForOrcamento}
+        onVerOrcamentos={() => setActiveTab('orcamentos')}
       />
 
       <div className="flex-1 flex max-w-7xl w-full mx-auto">
@@ -275,6 +354,7 @@ export default function App() {
               onViewOrcamento={handleViewOrcamento}
               onUpdateStatus={handleUpdateStatus}
               onShowToast={addToast}
+              onOpenTutorial={() => setIsTutorialOpen(true)}
             />
           )}
 
@@ -366,6 +446,7 @@ export default function App() {
         empresa={empresa}
         onSave={(newEmpresa) => setEmpresa(newEmpresa)}
         onShowToast={addToast}
+        onOpenTutorial={() => setIsTutorialOpen(true)}
       />
 
       <TutorialModal
