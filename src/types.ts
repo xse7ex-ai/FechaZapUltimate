@@ -24,7 +24,7 @@ export interface Orcamento {
   dataValidade: string;
   formaPagamento: string;
   prazoEntrega: string;
-  observacoes: string;
+  observacoes?: string;
   termosGarantia?: string;
 }
 

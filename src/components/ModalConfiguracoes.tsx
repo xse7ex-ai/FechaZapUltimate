@@ -10,7 +10,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { ConfiguracaoEmpresa } from '../types';
-import { checkGeminiStatus, GeminiStatusResult } from '../utils/ai';
+import { testarConexaoGemini, GeminiStatusResult } from '../utils/ai';
 
 interface ModalConfiguracoesProps {
   isOpen: boolean;
@@ -41,7 +41,7 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
     setTestingAi(true);
     setTestResult(null);
     try {
-      const res = await checkGeminiStatus(formData.geminiKeyCustom);
+      const res = await testarConexaoGemini(formData.geminiKeyCustom);
       setTestResult(res);
       if (res.configured) {
         onShowToast('Gemini API Conectada!', `Modelo ${res.model} respondendo com sucesso.`, 'success');

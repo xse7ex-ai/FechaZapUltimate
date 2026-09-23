@@ -17,6 +17,7 @@ import confetti from 'canvas-confetti';
 import { Orcamento, Cliente, ConfiguracaoEmpresa, StatusOrcamento } from '../types';
 import { formatCurrency, formatDate, formatPhone, getStatusBadge } from '../utils/format';
 import { generateWhatsAppQuoteText, openWhatsAppMessage } from '../utils/whatsapp';
+import { ReceitaAcumuladaChart } from './ReceitaAcumuladaChart';
 
 interface DashboardViewProps {
   orcamentos: Orcamento[];
@@ -197,6 +198,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Recharts Bar Chart: Receita Total Acumulada dos Últimos 6 Meses */}
+      <ReceitaAcumuladaChart orcamentos={orcamentos} />
 
       {/* Visual Pipeline Funnel */}
       <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs">

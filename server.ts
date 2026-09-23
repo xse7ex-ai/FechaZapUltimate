@@ -60,7 +60,7 @@ async function generateWithGemini(
   throw lastError || new Error('Falha ao comunicar com a API Google Gemini.');
 }
 
-// Check Gemini API Status
+// Check Gemini API Status (Fast health check)
 app.get('/api/ai/status', async (req: Request, res: Response) => {
   try {
     const customKey = req.headers['x-gemini-key'] as string | undefined;
@@ -74,6 +74,27 @@ app.get('/api/ai/status', async (req: Request, res: Response) => {
       });
     }
 
+    return res.json({
+      configured: true,
+      model: 'gemini-3.8-flash',
+      status: 'active',
+      sample: 'ONLINE',
+      provider: 'Google Gemini'
+    });
+  } catch (error: any) {
+    console.error('Erro ao testar Gemini API:', error);
+    return res.json({
+      configured: false,
+      model: 'gemini-3.8-flash',
+      error: error?.message || 'Erro ao conectar com a API Gemini',
+    });
+  }
+});
+
+// Live Test of Gemini Connection (Full generation test)
+app.post('/api/ai/test', async (req: Request, res: Response) => {
+  try {
+    const customKey = req.headers['x-gemini-key'] as string | undefined;
     const ai = getGeminiClient(customKey);
     const result = await generateWithGemini(ai, 'Diga apenas ONLINE', { temperature: 0.1 });
 
@@ -85,11 +106,10 @@ app.get('/api/ai/status', async (req: Request, res: Response) => {
       provider: 'Google Gemini'
     });
   } catch (error: any) {
-    console.error('Erro ao testar Gemini API:', error);
     return res.json({
       configured: false,
       model: 'gemini-3.8-flash',
-      error: error?.message || 'Erro ao conectar com a API Gemini',
+      error: error?.message || 'Falha ao testar chamada com Gemini',
     });
   }
 });

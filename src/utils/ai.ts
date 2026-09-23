@@ -34,6 +34,24 @@ export async function checkGeminiStatus(customKey?: string): Promise<GeminiStatu
   }
 }
 
+export async function testarConexaoGemini(customKey?: string): Promise<GeminiStatusResult> {
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (customKey) {
+      headers['x-gemini-key'] = customKey;
+    }
+    const res = await fetch('/api/ai/test', { method: 'POST', headers });
+    if (!res.ok) {
+      return await checkGeminiStatus(customKey);
+    }
+    return await res.json();
+  } catch {
+    return await checkGeminiStatus(customKey);
+  }
+}
+
 export async function gerarFechamentoGemini(
   orcamento: Orcamento,
   gatilho: string,

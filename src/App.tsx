@@ -36,7 +36,17 @@ export default function App() {
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>(() => {
     try {
       const saved = localStorage.getItem('fechazap_orcamentos_v3');
-      return saved ? JSON.parse(saved) : INITIAL_ORCAMENTOS;
+      if (saved) {
+        const parsed: Orcamento[] = JSON.parse(saved);
+        const missingInitial = INITIAL_ORCAMENTOS.filter(
+          (init) => !parsed.some((p) => p.id === init.id)
+        );
+        if (missingInitial.length > 0) {
+          return [...parsed, ...missingInitial];
+        }
+        return parsed;
+      }
+      return INITIAL_ORCAMENTOS;
     } catch {
       return INITIAL_ORCAMENTOS;
     }
