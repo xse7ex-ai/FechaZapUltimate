@@ -52,7 +52,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                 Fecha<span className="text-emerald-600 dark:text-emerald-400">Zap</span>
               </span>
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
-                v3.1.4
+                v3.1.5
               </span>
               {onOpenPerfil && (
                 <button

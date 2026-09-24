@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { UserProfile, UserQuota, TipoPlano } from '../types';
+import { getApiUrl } from './apiConfig';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -27,7 +28,8 @@ export function isSupabaseConfigured(): boolean {
   return Boolean(client && supabaseUrl);
 }
 
-// Retorna o token JWT atual para autenticar requisições seguras ao Worker/Servidor
+// Retorna o token JWT criptografado emitido pelo Supabase Auth
+// Tokens locais ou de modo offline NÃO são considerados tokens de autorização válidos para a API
 export async function getAuthToken(): Promise<string | null> {
   if (client) {
     const { data } = await client.auth.getSession();
@@ -36,9 +38,13 @@ export async function getAuthToken(): Promise<string | null> {
     }
   }
 
-  // Fallback: se houver token salvo localmente em modo offline/demo
+  // Fallback: se houver sessão salva
   try {
-    return localStorage.getItem('fechazap_auth_token');
+    const stored = localStorage.getItem('fechazap_auth_token');
+    if (stored && !stored.startsWith('local-')) {
+      return stored;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -57,11 +63,11 @@ export async function fetchServerUserProfileAndQuota(): Promise<{
   }
 
   try {
-    const res = await fetch('/api/auth/me', { headers });
+    const res = await fetch(getApiUrl('/api/auth/me'), { headers });
     if (res.ok) {
       const data = await res.json();
       return {
-        authenticated: data.authenticated,
+        authenticated: Boolean(data.authenticated),
         user: {
           id: data.user.id,
           email: data.user.email,
@@ -72,7 +78,7 @@ export async function fetchServerUserProfileAndQuota(): Promise<{
           plano: (data.quota.plano as TipoPlano) || 'GRATUITO',
           used: data.quota.used || 0,
           limit: data.quota.limit || 10,
-          allowed: data.quota.allowed ?? true,
+          allowed: data.quota.allowed ?? false,
         },
       };
     }
@@ -91,21 +97,21 @@ export async function fetchServerUserProfileAndQuota(): Promise<{
       plano: 'GRATUITO',
       used: 0,
       limit: 10,
-      allowed: true,
+      allowed: false,
     },
   };
 }
 
-export async function loginWithEmail(email: string, password: string):Promise<{ success: boolean; error?: string }> {
+export async function loginWithEmail(email: string, password: string): Promise<{ success: boolean; error?: string }> {
   if (!client) {
-    // Modo simulação local com persistência
+    // Modo simulação local/offline demonstrativo
     if (email && password) {
       const mockToken = `local-jwt-${Date.now()}`;
       localStorage.setItem('fechazap_auth_token', mockToken);
       localStorage.setItem('fechazap_auth_user', JSON.stringify({ email, plano: 'GRATUITO' }));
       return { success: true };
     }
-    return { success: false, error: 'Supabase não configurado no frontend. Configure VITE_SUPABASE_URL.' };
+    return { success: false, error: 'Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.' };
   }
 
   try {
@@ -120,6 +126,7 @@ export async function loginWithEmail(email: string, password: string):Promise<{ 
   }
 }
 
+// Cadastro seguro: Todo novo usuário é cadastrado como GRATUITO
 export async function registerWithEmail(email: string, password: string, nome?: string): Promise<{ success: boolean; error?: string }> {
   if (!client) {
     const mockToken = `local-jwt-${Date.now()}`;
@@ -133,7 +140,10 @@ export async function registerWithEmail(email: string, password: string, nome?: 
       email,
       password,
       options: {
-        data: { nome, plano: 'GRATUITO' },
+        data: {
+          nome,
+          plano: 'GRATUITO',
+        },
       },
     });
     if (error) return { success: false, error: error.message };

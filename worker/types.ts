@@ -1,4 +1,5 @@
-// Tipos para o Cloudflare Worker do FechaZap 3.1.4
+// Tipos para o Cloudflare Worker do FechaZap 3.1.5
+// Arquitetura Segura: Cloudflare Worker + Supabase Auth/PostgreSQL + Google Gemini + Meta WhatsApp
 
 export interface Env {
   GEMINI_API_KEY?: string;
@@ -8,6 +9,7 @@ export interface Env {
   WHATSAPP_TOKEN?: string;
   PHONE_NUMBER_ID?: string;
   APP_ENV?: string;
+  ALLOWED_ORIGINS?: string;
 }
 
 export type TipoPlano = 'GRATUITO' | 'PRO' | 'TURBO';
@@ -27,5 +29,6 @@ export interface QuotaCheckResult {
   plano: TipoPlano;
   used: number;
   limit: number;
+  remaining?: number;
   month: string;
 }

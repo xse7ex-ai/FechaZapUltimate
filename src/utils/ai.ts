@@ -1,5 +1,6 @@
 import { Orcamento, ConfiguracaoEmpresa } from '../types';
 import { getAuthToken } from './supabase';
+import { getApiUrl } from './apiConfig';
 
 export interface GeminiStatusResult {
   configured: boolean;
@@ -17,6 +18,12 @@ export function parseAiError(errData: any): string {
   if (typeof errData === 'string') {
     if (errData.includes('503') || errData.includes('high demand') || errData.includes('UNAVAILABLE')) {
       return 'Os servidores do Google Gemini estão com alta demanda temporária. O FechaZap ativou o modo de contingência.';
+    }
+    if (errData.includes('401') || errData.includes('Não autorizado')) {
+      return 'Acesso não autorizado. É necessário fazer login para utilizar a inteligência artificial.';
+    }
+    if (errData.includes('429') || errData.includes('Limite mensal')) {
+      return errData;
     }
     try {
       const parsed = JSON.parse(errData);
@@ -47,18 +54,24 @@ async function buildAuthHeaders(): Promise<Record<string, string>> {
   return headers;
 }
 
+// Consulta de status segura (sem expor secrets ou chaves de API)
 export async function checkGeminiStatus(): Promise<GeminiStatusResult> {
   try {
-    const res = await fetch('/api/ai/status');
+    const res = await fetch(getApiUrl('/api/ai/status'));
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
       return {
         configured: false,
         model: 'gemini-3.8-flash',
-        error: err.error || `HTTP ${res.status}: Erro ao conectar com Gemini API`,
+        error: `HTTP ${res.status}: Servidor de IA indisponível`,
       };
     }
-    return await res.json();
+    const data = await res.json();
+    return {
+      configured: Boolean(data.configured && data.ok),
+      model: 'gemini-3.8-flash',
+      provider: data.provider || 'Google Gemini',
+      status: data.configured ? 'active' : 'unconfigured',
+    };
   } catch (err: any) {
     return {
       configured: false,
@@ -68,17 +81,9 @@ export async function checkGeminiStatus(): Promise<GeminiStatusResult> {
   }
 }
 
+// Teste de conexão seguro: utiliza o endpoint /api/ai/status sem expor rotas vulneráveis
 export async function testarConexaoGemini(): Promise<GeminiStatusResult> {
-  try {
-    const headers = await buildAuthHeaders();
-    const res = await fetch('/api/ai/test', { method: 'POST', headers });
-    if (!res.ok) {
-      return await checkGeminiStatus();
-    }
-    return await res.json();
-  } catch {
-    return await checkGeminiStatus();
-  }
+  return await checkGeminiStatus();
 }
 
 export async function gerarFechamentoGemini(
@@ -89,10 +94,11 @@ export async function gerarFechamentoGemini(
 ): Promise<string> {
   const headers = await buildAuthHeaders();
 
-  const res = await fetch('/api/ai/fechar-orcamento', {
+  const res = await fetch(getApiUrl('/api/ai/fechar-orcamento'), {
     method: 'POST',
     headers,
     body: JSON.stringify({
+      orcamentoId: orcamento.id,
       orcamento,
       gatilho,
       tom,
@@ -100,9 +106,15 @@ export async function gerarFechamentoGemini(
     }),
   });
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    throw new Error('Acesso não autorizado. Faça login com sua conta para utilizar o FechaZap IA.');
+  }
+  if (res.status === 429) {
+    throw new Error(data.error || 'Limite mensal de IA atingido para o seu plano. Faça upgrade para continuar.');
+  }
   if (!res.ok || !data.success) {
-    throw new Error(parseAiError(data.error || 'Falha ao gerar copy com a API Gemini.'));
+    throw new Error(parseAiError(data.error || 'Falha ao gerar proposta com a IA.'));
   }
 
   return data.text;
@@ -116,10 +128,11 @@ export async function contornarObjecaoGemini(
 ): Promise<string> {
   const headers = await buildAuthHeaders();
 
-  const res = await fetch('/api/ai/contornar-objecao', {
+  const res = await fetch(getApiUrl('/api/ai/contornar-objecao'), {
     method: 'POST',
     headers,
     body: JSON.stringify({
+      orcamentoId: orcamento.id,
       orcamento,
       objecao,
       contexto,
@@ -127,9 +140,15 @@ export async function contornarObjecaoGemini(
     }),
   });
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    throw new Error('Acesso não autorizado. Faça login com sua conta para utilizar a IA.');
+  }
+  if (res.status === 429) {
+    throw new Error(data.error || 'Limite mensal de IA atingido para o seu plano.');
+  }
   if (!res.ok || !data.success) {
-    throw new Error(parseAiError(data.error || 'Falha ao contornar objeção com a API Gemini.'));
+    throw new Error(parseAiError(data.error || 'Falha ao contornar objeção com a IA.'));
   }
 
   return data.text;
@@ -142,19 +161,26 @@ export async function gerarFollowUpGemini(
 ): Promise<string> {
   const headers = await buildAuthHeaders();
 
-  const res = await fetch('/api/ai/follow-up', {
+  const res = await fetch(getApiUrl('/api/ai/follow-up'), {
     method: 'POST',
     headers,
     body: JSON.stringify({
+      orcamentoId: orcamento.id,
       orcamento,
       dias,
       empresa,
     }),
   });
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    throw new Error('Acesso não autorizado. Faça login para utilizar a IA.');
+  }
+  if (res.status === 429) {
+    throw new Error(data.error || 'Limite mensal de IA atingido para o seu plano.');
+  }
   if (!res.ok || !data.success) {
-    throw new Error(parseAiError(data.error || 'Falha ao gerar follow-up com a API Gemini.'));
+    throw new Error(parseAiError(data.error || 'Falha ao gerar follow-up com a IA.'));
   }
 
   return data.text;
@@ -167,7 +193,7 @@ export async function chatComGemini(
 ): Promise<string> {
   const headers = await buildAuthHeaders();
 
-  const res = await fetch('/api/ai/chat', {
+  const res = await fetch(getApiUrl('/api/ai/chat'), {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -177,20 +203,26 @@ export async function chatComGemini(
     }),
   });
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    throw new Error('Acesso não autorizado. Faça login para utilizar o chat com a IA.');
+  }
+  if (res.status === 429) {
+    throw new Error(data.error || 'Limite mensal de IA atingido para o seu plano.');
+  }
   if (!res.ok || !data.success) {
-    throw new Error(parseAiError(data.error || 'Falha na comunicação com a API Gemini.'));
+    throw new Error(parseAiError(data.error || 'Falha na comunicação com a IA.'));
   }
 
   return data.text;
 }
 
 export async function diagnosticoVendasGemini(
-  relatorio: any
+  relatorio?: any
 ): Promise<{ text: string; dataSource?: string }> {
   const headers = await buildAuthHeaders();
 
-  const res = await fetch('/api/ai/diagnostico-vendas', {
+  const res = await fetch(getApiUrl('/api/ai/diagnostico-vendas'), {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -198,9 +230,15 @@ export async function diagnosticoVendasGemini(
     }),
   });
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    throw new Error('Acesso não autorizado. Faça login para acessar o diagnóstico de vendas.');
+  }
+  if (res.status === 429) {
+    throw new Error(data.error || 'Limite mensal de IA atingido para o seu plano.');
+  }
   if (!res.ok || !data.success) {
-    throw new Error(parseAiError(data.error || 'Falha ao gerar diagnóstico com a API Gemini.'));
+    throw new Error(parseAiError(data.error || 'Falha ao gerar diagnóstico de vendas.'));
   }
 
   return {

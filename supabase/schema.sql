@@ -74,6 +74,8 @@ CREATE INDEX IF NOT EXISTS idx_clientes_user_id ON public.clientes(user_id);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_user_mes ON public.ai_usage(user_id, mes_referencia);
 
 -- 6. Trigger Automático para Criar Perfil ao Cadastrar Usuário no Supabase Auth
+-- REGRA 3.1.5: Todo novo usuário é cadastrado OBRIGATORIAMENTE com plano GRATUITO.
+-- Metadados de plano enviados pelo cliente são expressamente ignorados.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -82,7 +84,7 @@ BEGIN
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'nome', split_part(NEW.email, '@', 1)),
-    COALESCE(NEW.raw_user_meta_data->>'plano', 'GRATUITO')
+    'GRATUITO'
   )
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
@@ -94,23 +96,52 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 7. Função de Verificação de Limite de IA no Banco
-CREATE OR REPLACE FUNCTION public.check_ai_quota(user_uuid UUID)
+-- 7. Proteção Absoluta contra Alteração do Campo 'plano' pelo Usuário Comum
+-- O cliente NUNCA pode alterar o próprio plano via UPDATE comum.
+CREATE OR REPLACE FUNCTION public.protect_profile_plan_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.plano IS DISTINCT FROM OLD.plano THEN
+    -- Apenas chamadas administrativas / service_role podem atualizar o plano
+    IF coalesce(current_setting('request.jwt.claim.role', true), '') != 'service_role' THEN
+      NEW.plano := OLD.plano;
+    END IF;
+  END IF;
+  NEW.updated_at := NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_protect_profile_plan ON public.profiles;
+CREATE TRIGGER trg_protect_profile_plan
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.protect_profile_plan_update();
+
+-- 8. Função ATÔMICA e Transacional de Consumo de Quota de IA (Prevenção de Race Conditions)
+-- Executa com LOCK no perfil (FOR UPDATE), verifica o limite real e insere o log no mesmo passo.
+CREATE OR REPLACE FUNCTION public.consume_ai_quota(
+  p_user_id UUID,
+  p_tipo_operacao TEXT,
+  p_modelo TEXT DEFAULT 'gemini-3.8-flash'
+)
 RETURNS JSONB AS $$
 DECLARE
   v_plano TEXT;
   v_mes TEXT;
-  v_count INT;
   v_limit INT;
-  v_allowed BOOLEAN;
+  v_current_count INT;
 BEGIN
-  -- Identifica o plano do usuário
-  SELECT plano INTO v_plano FROM public.profiles WHERE id = user_uuid;
+  -- Trava a linha do perfil para serializar requisições concorrentes do mesmo usuário
+  SELECT plano INTO v_plano
+  FROM public.profiles
+  WHERE id = p_user_id
+  FOR UPDATE;
+
   IF v_plano IS NULL THEN
     v_plano := 'GRATUITO';
   END IF;
 
-  -- Define os limites por plano
+  -- Define os limites formais da versão 3.1.5
   IF v_plano = 'TURBO' THEN
     v_limit := 1500;
   ELSIF v_plano = 'PRO' THEN
@@ -119,25 +150,79 @@ BEGIN
     v_limit := 10; -- GRATUITO
   END IF;
 
-  -- Conta requisições no mês atual
   v_mes := to_char(NOW(), 'YYYY-MM');
-  SELECT COUNT(*) INTO v_count
-  FROM public.ai_usage
-  WHERE user_id = user_uuid AND mes_referencia = v_mes;
 
-  v_allowed := (v_count < v_limit);
+  -- Conta requisições já consumidas no mês de referência
+  SELECT COUNT(*) INTO v_current_count
+  FROM public.ai_usage
+  WHERE user_id = p_user_id AND mes_referencia = v_mes;
+
+  -- Se atingiu ou ultrapassou a quota, nega imediatamente sem reservar
+  IF v_current_count >= v_limit THEN
+    RETURN jsonb_build_object(
+      'allowed', false,
+      'plano', v_plano,
+      'used', v_current_count,
+      'limit', v_limit,
+      'remaining', 0,
+      'month', v_mes
+    );
+  END IF;
+
+  -- Reserva e registra atomicamente a chamada de IA autorizada
+  INSERT INTO public.ai_usage (user_id, tipo_operacao, modelo, mes_referencia)
+  VALUES (p_user_id, p_tipo_operacao, p_modelo, v_mes);
 
   RETURN jsonb_build_object(
+    'allowed', true,
     'plano', v_plano,
-    'used', v_count,
+    'used', v_current_count + 1,
     'limit', v_limit,
-    'allowed', v_allowed,
+    'remaining', v_limit - (v_current_count + 1),
     'month', v_mes
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 8. Ativação de Row Level Security (RLS)
+-- 9. Função de Consulta Informativa de Quota (Read-only)
+CREATE OR REPLACE FUNCTION public.check_ai_quota(user_uuid UUID)
+RETURNS JSONB AS $$
+DECLARE
+  v_plano TEXT;
+  v_mes TEXT;
+  v_count INT;
+  v_limit INT;
+BEGIN
+  SELECT plano INTO v_plano FROM public.profiles WHERE id = user_uuid;
+  IF v_plano IS NULL THEN
+    v_plano := 'GRATUITO';
+  END IF;
+
+  IF v_plano = 'TURBO' THEN
+    v_limit := 1500;
+  ELSIF v_plano = 'PRO' THEN
+    v_limit := 250;
+  ELSE
+    v_limit := 10;
+  END IF;
+
+  v_mes := to_char(NOW(), 'YYYY-MM');
+  SELECT COUNT(*) INTO v_count
+  FROM public.ai_usage
+  WHERE user_id = user_uuid AND mes_referencia = v_mes;
+
+  RETURN jsonb_build_object(
+    'plano', v_plano,
+    'used', v_count,
+    'limit', v_limit,
+    'allowed', (v_count < v_limit),
+    'remaining', GREATEST(0, v_limit - v_count),
+    'month', v_mes
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 10. Ativação de Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orcamentos ENABLE ROW LEVEL SECURITY;

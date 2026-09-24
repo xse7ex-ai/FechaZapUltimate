@@ -1,6 +1,7 @@
 import { Orcamento, ConfiguracaoEmpresa } from '../types';
 import { formatCurrency, formatDate, cleanPhone } from './format';
 import { getAuthToken } from './supabase';
+import { getApiUrl } from './apiConfig';
 
 export function generateWhatsAppQuoteText(orcamento: Orcamento, empresa: ConfiguracaoEmpresa): string {
   const itemsText = orcamento.itens
@@ -55,7 +56,7 @@ export function openWhatsAppMessage(phone: string, text: string): void {
   window.open(url, '_blank');
 }
 
-// Disparo direto via Meta WhatsApp Cloud API utilizando as credenciais da empresa
+// Disparo direto via Meta WhatsApp Cloud API utilizando as credenciais da empresa do cliente
 export async function sendWhatsAppViaApi(
   to: string,
   text: string,
@@ -130,5 +131,48 @@ export async function sendWhatsAppViaApi(
   }
 }
 
-export const sendWhatsAppMeta = sendWhatsAppViaApi;
+// Disparo seguro autenticado através do Worker/Backend (Planos PRO e TURBO)
+export async function sendWhatsAppViaBackend(
+  to: string,
+  text: string,
+  orcamentoId?: string
+): Promise<{ success: boolean; provider: string; messageId?: string; error?: string; fallbackUrl?: string }> {
+  const phone = cleanPhone(to);
+  const fallbackUrl = generateWhatsAppUrl(phone, text);
 
+  try {
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        provider: 'unauthorized',
+        error: 'É necessário estar autenticado para utilizar o envio automatizado pelo servidor.',
+        fallbackUrl,
+      };
+    }
+
+    const res = await fetch(getApiUrl('/api/whatsapp/send'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        to,
+        message: text,
+        orcamentoId,
+      }),
+    });
+
+    return await res.json();
+  } catch (err: any) {
+    return {
+      success: false,
+      provider: 'network_error',
+      error: err?.message || 'Falha de comunicação com o servidor',
+      fallbackUrl,
+    };
+  }
+}
+
+export const sendWhatsAppMeta = sendWhatsAppViaApi;
