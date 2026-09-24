@@ -55,7 +55,24 @@ export interface ConfiguracaoEmpresa {
   logoUrl?: string;
   mensagemPadraoWhatsapp: string;
   modeloIA: string;
-  geminiKeyCustom?: string;
+}
+
+export type TipoPlano = 'GRATUITO' | 'PRO' | 'TURBO';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  nome?: string;
+  plano: TipoPlano;
+  empresaNome?: string;
+}
+
+export interface UserQuota {
+  plano: TipoPlano;
+  used: number;
+  limit: number;
+  allowed: boolean;
+  month?: string;
 }
 
 export interface GatilhoIA {

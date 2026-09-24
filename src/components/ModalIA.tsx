@@ -102,8 +102,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
         currentOrcamento,
         `${gatilhoObj?.titulo || ''} - ${gatilhoObj?.descricao || ''}`,
         tomVoz,
-        empresa,
-        empresa.geminiKeyCustom
+        empresa
       );
       setGeneratedText(text);
       onShowToast('Copy gerada pelo Gemini!', 'Mensagem pronta para WhatsApp.', 'success');
@@ -124,8 +123,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
         currentOrcamento,
         objecaoFinal,
         'Negociação pelo WhatsApp',
-        empresa,
-        empresa.geminiKeyCustom
+        empresa
       );
       setGeneratedText(text);
       onShowToast('Solução de objeção gerada!', 'Respostas persuasivas com Gemini.', 'success');
@@ -144,8 +142,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
       const text = await gerarFollowUpGemini(
         currentOrcamento,
         diasFollowUp,
-        empresa,
-        empresa.geminiKeyCustom
+        empresa
       );
       setGeneratedText(text);
       onShowToast('Follow-up criado com Gemini!', 'Mensagem amigável de acompanhamento.', 'success');
@@ -176,8 +173,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
               status: currentOrcamento.status,
             }
           : null,
-        newHistory,
-        empresa.geminiKeyCustom
+        newHistory
       );
       setChatMessages([...newHistory, { role: 'model', text: reply }]);
     } catch (err: any) {

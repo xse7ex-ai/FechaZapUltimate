@@ -14,11 +14,11 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// Helper to get GoogleGenAI instance
-function getGeminiClient(customApiKey?: string) {
-  const apiKey = customApiKey || process.env.GEMINI_API_KEY;
+// Helper to get GoogleGenAI instance strictly from server environment
+function getGeminiClient() {
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error('Chave da API Gemini não configurada. Defina a variável GEMINI_API_KEY no ambiente ou informe nas configurações.');
+    throw new Error('Chave da API Gemini não configurada. Defina a variável GEMINI_API_KEY no ambiente do servidor.');
   }
   return new GoogleGenAI({ apiKey });
 }
@@ -49,12 +49,10 @@ async function generateWithGemini(
   prompt: string,
   options: { systemInstruction?: string; temperature?: number } = {}
 ): Promise<{ text: string; model: string }> {
-  // Models permitted by Gemini API guidelines
   const modelsToTry = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
-    // Up to 2 attempts per model if transient spike occurs
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const callPromise = ai.models.generateContent({
@@ -66,7 +64,6 @@ async function generateWithGemini(
           },
         });
 
-        // 15-second timeout to handle peak queue times without prematurely aborting
         const timeoutPromise = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error(`Timeout no modelo ${model}`)), 15000)
         );
@@ -80,11 +77,10 @@ async function generateWithGemini(
         console.warn(`[Gemini API] Tentativa ${attempt} no modelo ${model} retornou:`, err?.message || err);
 
         if (isTransientError(err) && attempt < 2) {
-          // Wait briefly with backoff before retry on high demand spikes
           await delay(800 * attempt);
           continue;
         }
-        break; // Try next model in list
+        break;
       }
     }
   }
@@ -106,7 +102,7 @@ function generateFallbackFechamento(
     currency: 'BRL',
   });
   const empresaNome = empresa?.nomeFantasia || 'Nossa Empresa';
-  const chavePix = empresa?.chavePix ? `\n🔑 *Chave Pix:* ${empresa.chavePix}` : '';
+  const chavePix = empresa?.chavePix ? `\n🔑 *Chave Pix:* \`${empresa.chavePix}\`` : '';
 
   const itensLista =
     orcamento?.itens && orcamento.itens.length > 0
@@ -222,7 +218,7 @@ Me dá um alô assim que puder! 😊`;
 
 function generateFallbackChat(
   _message: string,
-  _context: any
+  _context?: any
 ): string {
   return `Dicas táticas de fechamento pelo WhatsApp:
 
@@ -242,64 +238,120 @@ function generateFallbackDiagnostico(relatorio: any): string {
 4. *Ação 2:* Use a quebra de objeções nos clientes que mencionaram "tá caro", oferecendo bônus no Pix em vez de baixar o preço.`;
 }
 
-// Check Gemini API Status (Fast health check)
-app.get('/api/ai/status', async (req: Request, res: Response) => {
+// Helper: Supabase Auth & Plan verification
+async function verifyUserAndPlan(authHeader?: string) {
+  const defaultGuest = {
+    id: 'anon',
+    email: '',
+    plano: 'GRATUITO',
+    used: 0,
+    limit: 10,
+    allowed: true,
+    isAuthed: false,
+  };
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return defaultGuest;
+  }
+
+  const token = authHeader.replace('Bearer ', '').trim();
+  const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, '');
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (!token || !supabaseUrl || !serviceKey) {
+    return defaultGuest;
+  }
+
   try {
-    const customKey = req.headers['x-gemini-key'] as string | undefined;
-    const apiKey = customKey || process.env.GEMINI_API_KEY;
-    
-    if (!apiKey) {
-      return res.json({
-        configured: false,
-        model: 'gemini-3.8-flash',
-        message: 'GEMINI_API_KEY não encontrada no servidor.',
+    const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: serviceKey,
+      },
+    });
+
+    if (!userRes.ok) return defaultGuest;
+    const userData: any = await userRes.json();
+    const userId = userData.id;
+
+    let plano = 'GRATUITO';
+    let used = 0;
+    const limit = plano === 'TURBO' ? 1500 : plano === 'PRO' ? 250 : 10;
+
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const profRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=plano`, {
+        headers: {
+          apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
       });
+      if (profRes.ok) {
+        const rows: any[] = await profRes.json();
+        if (rows.length > 0 && rows[0].plano) {
+          plano = rows[0].plano.toUpperCase();
+        }
+      }
     }
 
-    return res.json({
-      configured: true,
-      model: 'gemini-3.8-flash',
-      status: 'active',
-      sample: 'ONLINE',
-      provider: 'Google Gemini'
-    });
-  } catch (error: any) {
-    console.error('Erro ao testar Gemini API:', error);
+    return {
+      id: userId,
+      email: userData.email,
+      plano,
+      used,
+      limit,
+      allowed: true,
+      isAuthed: true,
+    };
+  } catch (err) {
+    console.warn('Erro ao validar token com Supabase:', err);
+    return defaultGuest;
+  }
+}
+
+// 1. Check Gemini API Status (Fast health check)
+app.get('/api/ai/status', async (_req: Request, res: Response) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
     return res.json({
       configured: false,
       model: 'gemini-3.8-flash',
-      error: error?.message || 'Erro ao conectar com a API Gemini',
+      status: 'unconfigured',
+      message: 'GEMINI_API_KEY não encontrada no servidor.',
     });
   }
+
+  return res.json({
+    configured: true,
+    model: 'gemini-3.8-flash',
+    status: 'active',
+    sample: 'ONLINE',
+    provider: 'Google Gemini',
+  });
 });
 
-function extractCleanErrorMessage(err: any): string {
-  if (!err) return 'Erro desconhecido ao processar com o Gemini.';
-  let raw = err.message || (typeof err === 'string' ? err : '');
-  if (typeof raw === 'string') {
-    if (raw.trim().startsWith('{') || raw.includes('"code":503') || raw.includes('high demand') || raw.includes('UNAVAILABLE')) {
-      try {
-        const parsed = JSON.parse(raw.trim());
-        if (parsed.error?.message) {
-          if (parsed.error.code === 503 || parsed.error.status === 'UNAVAILABLE' || parsed.error.message.includes('high demand')) {
-            return 'Os servidores do Google Gemini estão com alta demanda temporária. O FechaZap ativou o modo de contingência.';
-          }
-          return parsed.error.message;
-        }
-      } catch {
-        // Not valid JSON
-      }
-      return 'Os servidores do Google Gemini estão com alta demanda temporária. O FechaZap ativou o modo de contingência.';
-    }
-  }
-  return raw || 'Falha ao comunicar com a API Google Gemini.';
-}
+// 2. Auth me endpoint
+app.get('/api/auth/me', async (req: Request, res: Response) => {
+  const user = await verifyUserAndPlan(req.headers['authorization']);
+  return res.json({
+    authenticated: user.isAuthed,
+    user: {
+      id: user.id,
+      email: user.email,
+      plano: user.plano,
+    },
+    quota: {
+      plano: user.plano,
+      used: user.used,
+      limit: user.limit,
+      allowed: user.allowed,
+    },
+  });
+});
 
-// Live Test of Gemini Connection (Full generation test)
-app.post('/api/ai/test', async (req: Request, res: Response) => {
+// 3. Live Test of Gemini Connection
+app.post('/api/ai/test', async (_req: Request, res: Response) => {
   try {
-    const customKey = req.headers['x-gemini-key'] as string | undefined;
-    const ai = getGeminiClient(customKey);
+    const ai = getGeminiClient();
     let result;
     try {
       result = await generateWithGemini(ai, 'Diga apenas ONLINE', { temperature: 0.1 });
@@ -328,17 +380,25 @@ app.post('/api/ai/test', async (req: Request, res: Response) => {
     return res.json({
       configured: false,
       model: 'gemini-3.8-flash',
-      error: extractCleanErrorMessage(error),
+      error: error?.message || 'Falha ao comunicar com a API Google Gemini.',
     });
   }
 });
 
-// Fechamento de Orçamento com Gatilhos Persuasivos
+// 4. Fechamento de Orçamento com Gatilhos Persuasivos
 app.post('/api/ai/fechar-orcamento', async (req: Request, res: Response) => {
   const { orcamento, gatilho, tom, empresa } = req.body;
+  const user = await verifyUserAndPlan(req.headers['authorization']);
+
+  if (user.isAuthed && !user.allowed) {
+    return res.status(403).json({
+      success: false,
+      error: `Limite mensal de IA atingido para o plano ${user.plano}. Faça upgrade para continuar.`,
+    });
+  }
+
   try {
-    const customKey = req.headers['x-gemini-key'] as string | undefined;
-    const ai = getGeminiClient(customKey);
+    const ai = getGeminiClient();
 
     const systemInstruction = `Você é o "FechaZap IA", o maior especialista do Brasil em fechamento de vendas e orçamentos pelo WhatsApp.
 Sua missão é criar mensagens persuasivas, naturais, profissionais e envolventes em português brasileiro para prestadores de serviço e comércios enviarem aos seus clientes pelo WhatsApp.
@@ -379,7 +439,6 @@ Crie a mensagem pronta para envio no WhatsApp:`;
         text: fallbackText,
         model: 'fechazap-contingencia',
         contingency: true,
-        notice: 'Google Gemini em alta demanda temporária. Mensagem otimizada pelo motor de contingência inteligente.',
       });
     }
 
@@ -390,7 +449,6 @@ Crie a mensagem pronta para envio no WhatsApp:`;
     });
   } catch (error: any) {
     console.error('Erro na rota /api/ai/fechar-orcamento:', error);
-    // Even if client init or other error occurs, return fallback rather than failing
     const fallbackText = generateFallbackFechamento(orcamento, gatilho, tom, empresa);
     return res.json({
       success: true,
@@ -401,12 +459,20 @@ Crie a mensagem pronta para envio no WhatsApp:`;
   }
 });
 
-// Contornador de Objeções (ex: "Tá caro", "Vou falar com sócio")
+// 5. Contornador de Objeções
 app.post('/api/ai/contornar-objecao', async (req: Request, res: Response) => {
   const { orcamento, objecao, contexto, empresa } = req.body;
+  const user = await verifyUserAndPlan(req.headers['authorization']);
+
+  if (user.isAuthed && !user.allowed) {
+    return res.status(403).json({
+      success: false,
+      error: `Limite mensal de IA atingido para o plano ${user.plano}.`,
+    });
+  }
+
   try {
-    const customKey = req.headers['x-gemini-key'] as string | undefined;
-    const ai = getGeminiClient(customKey);
+    const ai = getGeminiClient();
 
     const systemInstruction = `Você é o "FechaZap IA", especialista em negociação e quebra de objeções no WhatsApp.
 O objetivo é reverter a hesitação do cliente com respeito, validação da preocupação dele, ancoragem de valor e proposta de avanço.
@@ -434,7 +500,7 @@ Opção 2: Resposta focada em custo do erro/qualidade e garantia.`;
         temperature: 0.7,
       });
     } catch (geminiErr: any) {
-      console.warn('Gemini em alta demanda na quebra de objeções. Usando contingência FechaZap:', geminiErr?.message);
+      console.warn('Gemini contingência contornar objeção:', geminiErr?.message);
       const fallbackText = generateFallbackObjecao(orcamento, objecao, contexto, empresa);
       return res.json({
         success: true,
@@ -461,12 +527,20 @@ Opção 2: Resposta focada em custo do erro/qualidade e garantia.`;
   }
 });
 
-// Follow-up inteligente após dias sem resposta
+// 6. Follow-up
 app.post('/api/ai/follow-up', async (req: Request, res: Response) => {
   const { orcamento, dias, empresa } = req.body;
+  const user = await verifyUserAndPlan(req.headers['authorization']);
+
+  if (user.isAuthed && !user.allowed) {
+    return res.status(403).json({
+      success: false,
+      error: `Limite mensal de IA atingido para o plano ${user.plano}.`,
+    });
+  }
+
   try {
-    const customKey = req.headers['x-gemini-key'] as string | undefined;
-    const ai = getGeminiClient(customKey);
+    const ai = getGeminiClient();
 
     const prompt = `Gere uma mensagem de follow-up (acompanhamento de orçamento enviado) para WhatsApp.
 O cliente ${orcamento?.clienteNome || 'Cliente'} recebeu o orçamento de R$ ${Number(orcamento?.valorTotal || 0).toFixed(2)} há ${dias || '2'} dias e não respondeu.
@@ -485,7 +559,7 @@ Requisitos:
         temperature: 0.65,
       });
     } catch (geminiErr: any) {
-      console.warn('Gemini em alta demanda no follow-up. Usando contingência FechaZap:', geminiErr?.message);
+      console.warn('Gemini contingência follow-up:', geminiErr?.message);
       const fallbackText = generateFallbackFollowUp(orcamento, dias, empresa);
       return res.json({
         success: true,
@@ -512,14 +586,22 @@ Requisitos:
   }
 });
 
-// Chat interativo livre com Gemini focado em estratégias de vendas e negociação
+// 7. Chat interativo
 app.post('/api/ai/chat', async (req: Request, res: Response) => {
   const { message, context, history } = req.body;
-  try {
-    const customKey = req.headers['x-gemini-key'] as string | undefined;
-    const ai = getGeminiClient(customKey);
+  const user = await verifyUserAndPlan(req.headers['authorization']);
 
-    const systemInstruction = `Você é o consultor de vendas inteligente do aplicativo FechaZap 3.1.2.
+  if (user.isAuthed && !user.allowed) {
+    return res.status(403).json({
+      success: false,
+      error: `Limite mensal de IA atingido para o plano ${user.plano}.`,
+    });
+  }
+
+  try {
+    const ai = getGeminiClient();
+
+    const systemInstruction = `Você é o consultor de vendas inteligente do aplicativo FechaZap 3.1.4.
 Você auxilia prestadores de serviços, autônomos e pequenos negócios a aumentar sua taxa de conversão de orçamentos pelo WhatsApp.
 Você fornece conselhos táticos, scripts de WhatsApp prontos para copiar e colar, técnicas de precificação, ancoragem de valor e negociação.
 Sempre responda em português brasileiro, de forma direta, prática e objetiva.`;
@@ -540,7 +622,7 @@ Sempre responda em português brasileiro, de forma direta, prática e objetiva.`
         temperature: 0.7,
       });
     } catch (geminiErr: any) {
-      console.warn('Gemini em alta demanda no chat. Usando contingência FechaZap:', geminiErr?.message);
+      console.warn('Gemini contingência chat:', geminiErr?.message);
       const fallbackText = generateFallbackChat(message, context);
       return res.json({
         success: true,
@@ -567,12 +649,20 @@ Sempre responda em português brasileiro, de forma direta, prática e objetiva.`
   }
 });
 
-// Diagnóstico inteligente de Relatórios
+// 8. Diagnóstico de Vendas (Copiloto IA)
 app.post('/api/ai/diagnostico-vendas', async (req: Request, res: Response) => {
   const { relatorio } = req.body;
+  const user = await verifyUserAndPlan(req.headers['authorization']);
+
+  if (user.isAuthed && !user.allowed) {
+    return res.status(403).json({
+      success: false,
+      error: `Limite mensal de IA atingido para o plano ${user.plano}.`,
+    });
+  }
+
   try {
-    const customKey = req.headers['x-gemini-key'] as string | undefined;
-    const ai = getGeminiClient(customKey);
+    const ai = getGeminiClient();
 
     const prompt = `Analise os dados de vendas deste prestador de serviços no FechaZap:
 - Total de Orçamentos: ${relatorio.totalOrcamentos}
@@ -595,7 +685,7 @@ Use formato limpo com marcadores.`;
         temperature: 0.6,
       });
     } catch (geminiErr: any) {
-      console.warn('Gemini em alta demanda no diagnóstico. Usando contingência FechaZap:', geminiErr?.message);
+      console.warn('Gemini contingência diagnóstico:', geminiErr?.message);
       const fallbackText = generateFallbackDiagnostico(relatorio);
       return res.json({
         success: true,
@@ -622,7 +712,76 @@ Use formato limpo com marcadores.`;
   }
 });
 
-// In development, mount Vite middleware. In production, serve dist.
+// 9. Meta WhatsApp Cloud API endpoint
+app.post('/api/whatsapp/send', async (req: Request, res: Response) => {
+  const { to, message, text } = req.body;
+  const user = await verifyUserAndPlan(req.headers['authorization']);
+  const phone = (to || '').replace(/\D/g, '');
+  const formattedPhone = !phone.startsWith('55') && phone.length >= 10 && phone.length <= 11 ? `55${phone}` : phone;
+  const content = message || text || '';
+  const fallbackUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(content)}`;
+
+  const token = process.env.WHATSAPP_TOKEN;
+  const phoneId = process.env.PHONE_NUMBER_ID;
+
+  if (!token || !phoneId) {
+    return res.json({
+      success: false,
+      fallbackUrl,
+      provider: 'meta_not_configured',
+      error: 'WhatsApp Cloud API não configurada no servidor. Enviando via link direto WhatsApp Web.',
+    });
+  }
+
+  try {
+    const metaRes = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: formattedPhone,
+        type: 'text',
+        text: { preview_url: false, body: content },
+      }),
+    });
+
+    const data: any = await metaRes.json();
+    if (!metaRes.ok) {
+      return res.status(400).json({
+        success: false,
+        error: data.error?.message || 'Erro ao enviar via Meta WhatsApp API.',
+        fallbackUrl,
+      });
+    }
+
+    return res.json({
+      success: true,
+      messageId: data.messages?.[0]?.id,
+      provider: 'meta-cloud-api',
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: err?.message,
+      fallbackUrl,
+    });
+  }
+});
+
+app.get('/api/whatsapp/status', (_req: Request, res: Response) => {
+  const configured = Boolean(process.env.WHATSAPP_TOKEN && process.env.PHONE_NUMBER_ID);
+  res.json({
+    configured,
+    provider: 'Meta WhatsApp Cloud API',
+    phoneId: process.env.PHONE_NUMBER_ID ? 'Configurado' : 'Não configurado',
+  });
+});
+
+// Vite middleware in dev, static files in prod
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
@@ -639,7 +798,7 @@ async function startServer() {
   }
 
   app.listen(Number(PORT), '0.0.0.0', () => {
-    console.log(`🚀 FechaZap Server rodando em http://0.0.0.0:${PORT} com Google Gemini API`);
+    console.log(`🚀 FechaZap 3.1.4 Server rodando em http://0.0.0.0:${PORT} com Google Gemini API`);
   });
 }
 

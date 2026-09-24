@@ -10,6 +10,7 @@ import {
   ConfiguracaoEmpresa,
   ActiveTab,
   StatusOrcamento,
+  TipoPlano,
 } from './types';
 import {
   INITIAL_ORCAMENTOS,
@@ -27,10 +28,12 @@ import { ModalIA } from './components/ModalIA';
 import { ModalNovoOrcamento } from './components/ModalNovoOrcamento';
 import { ModalDetalhes } from './components/ModalDetalhes';
 import { ModalConfiguracoes } from './components/ModalConfiguracoes';
+import { ModalPerfilUsuario } from './components/ModalPerfilUsuario';
 import { TutorialModal } from './components/TutorialModal';
 import { Toast, ToastMessage } from './components/Toast';
 import { NotificationBanner } from './components/NotificationBanner';
 import { checkGeminiStatus } from './utils/ai';
+import { fetchServerUserProfileAndQuota } from './utils/supabase';
 import {
   getOrcamentosProximosValidade,
   dispararNotificacaoNativa,
@@ -83,6 +86,8 @@ export default function App() {
   const [isIAOpen, setIsIAOpen] = useState<boolean>(false);
   const [isConfigOpen, setIsConfigOpen] = useState<boolean>(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
+  const [isPerfilOpen, setIsPerfilOpen] = useState<boolean>(false);
+  const [userPlano, setUserPlano] = useState<TipoPlano>('GRATUITO');
 
   // Selected items
   const [selectedOrcamento, setSelectedOrcamento] = useState<Orcamento | null>(null);
@@ -106,16 +111,30 @@ export default function App() {
     localStorage.setItem('fechazap_empresa_v3', JSON.stringify(empresa));
   }, [empresa]);
 
-  // Initial check of Gemini API Health
+  const loadUserProfile = () => {
+    fetchServerUserProfileAndQuota()
+      .then((data) => {
+        setUserPlano(data.user.plano);
+      })
+      .catch(() => {
+        setUserPlano('GRATUITO');
+      });
+  };
+
   useEffect(() => {
-    checkGeminiStatus(empresa.geminiKeyCustom)
+    loadUserProfile();
+  }, []);
+
+  // Initial check of Gemini API Health (Server-side/Worker)
+  useEffect(() => {
+    checkGeminiStatus()
       .then((res) => {
         setGeminiOnline(res.configured);
       })
       .catch(() => {
         setGeminiOnline(false);
       });
-  }, [empresa.geminiKeyCustom]);
+  }, []);
 
   // Exibe tutorial automaticamente no primeiro acesso da empresa/usuário
   useEffect(() => {
@@ -311,6 +330,8 @@ export default function App() {
         }}
         onOpenConfig={() => setIsConfigOpen(true)}
         onOpenTutorial={() => setIsTutorialOpen(true)}
+        onOpenPerfil={() => setIsPerfilOpen(true)}
+        userPlano={userPlano}
         geminiOnline={geminiOnline}
         vencimentos={vencimentos}
         onOpenIAForOrcamento={handleOpenIAForOrcamento}
@@ -339,6 +360,8 @@ export default function App() {
           }}
           onOpenConfig={() => setIsConfigOpen(true)}
           onOpenTutorial={() => setIsTutorialOpen(true)}
+          onOpenPerfil={() => setIsPerfilOpen(true)}
+          userPlano={userPlano}
           pendentesCount={pendentesCount}
         />
 
@@ -447,6 +470,13 @@ export default function App() {
         onSave={(newEmpresa) => setEmpresa(newEmpresa)}
         onShowToast={addToast}
         onOpenTutorial={() => setIsTutorialOpen(true)}
+      />
+
+      <ModalPerfilUsuario
+        isOpen={isPerfilOpen}
+        onClose={() => setIsPerfilOpen(false)}
+        onShowToast={addToast}
+        onPlanChanged={loadUserProfile}
       />
 
       <TutorialModal

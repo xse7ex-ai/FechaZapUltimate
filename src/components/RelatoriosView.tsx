@@ -54,9 +54,13 @@ export const RelatoriosView: React.FC<RelatoriosViewProps> = ({
         taxaConversao,
       };
 
-      const texto = await diagnosticoVendasGemini(relatorioData, empresa.geminiKeyCustom);
-      setDiagnostico(texto);
-      onShowToast('Diagnóstico Gerado com Gemini!', 'Análise de vendas concluída.', 'success');
+      const res = await diagnosticoVendasGemini(relatorioData);
+      setDiagnostico(res.text);
+      if (res.dataSource === 'supabase_real') {
+        onShowToast('Diagnóstico com Supabase!', 'Análise fundamentada nos orçamentos reais do banco.', 'success');
+      } else {
+        onShowToast('Diagnóstico Gerado com Gemini!', 'Análise de vendas concluída com sucesso.', 'success');
+      }
     } catch (err: any) {
       console.error(err);
       onShowToast('Falha no diagnóstico', err?.message, 'error');

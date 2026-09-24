@@ -49,7 +49,7 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
     setTestingAi(true);
     setTestResult(null);
     try {
-      const res = await testarConexaoGemini(formData.geminiKeyCustom);
+      const res = await testarConexaoGemini();
       setTestResult(res);
       if (res.configured) {
         onShowToast('Gemini API Conectada!', `Modelo ${res.model} respondendo com sucesso.`, 'success');
@@ -196,22 +196,10 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
                 <span className="font-medium text-slate-700 dark:text-slate-300">Google Gen AI</span>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  Chave de API Gemini Personalizada (Opcional):
-                </label>
-                <div className="relative">
-                  <Key className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                  <input
-                    type="password"
-                    placeholder="Deixe em branco para usar a chave padrão do ambiente AI Studio"
-                    value={formData.geminiKeyCustom || ''}
-                    onChange={(e) => handleChange('geminiKeyCustom', e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-750 focus:ring-2 focus:ring-emerald-500 font-mono"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                  Se você tiver sua própria chave do Google AI Studio, pode inseri-la aqui. Caso contrário, a chave do ambiente de execução é usada automaticamente.
+              <div className="p-2.5 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-850 flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-emerald-950 dark:text-emerald-200 leading-relaxed">
+                  <strong>Segurança Máxima:</strong> A chave da Gemini é protegida no servidor/Cloudflare Worker (<code>process.env.GEMINI_API_KEY</code>). O navegador jamais armazena ou manipula credenciais confidenciais.
                 </p>
               </div>
 

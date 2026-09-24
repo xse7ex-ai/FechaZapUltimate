@@ -1,4 +1,5 @@
 import { Orcamento, ConfiguracaoEmpresa } from '../types';
+import { getAuthToken } from './supabase';
 
 export interface GeminiStatusResult {
   configured: boolean;
@@ -7,6 +8,7 @@ export interface GeminiStatusResult {
   sample?: string;
   error?: string;
   provider?: string;
+  runtime?: string;
   contingency?: boolean;
 }
 
@@ -21,6 +23,9 @@ export function parseAiError(errData: any): string {
       if (parsed.error?.message) {
         return parsed.error.message;
       }
+      if (parsed.error && typeof parsed.error === 'string') {
+        return parsed.error;
+      }
     } catch {
       // not json
     }
@@ -31,13 +36,20 @@ export function parseAiError(errData: any): string {
   return 'Erro ao processar com a IA.';
 }
 
-export async function checkGeminiStatus(customKey?: string): Promise<GeminiStatusResult> {
+async function buildAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const token = await getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export async function checkGeminiStatus(): Promise<GeminiStatusResult> {
   try {
-    const headers: Record<string, string> = {};
-    if (customKey) {
-      headers['x-gemini-key'] = customKey;
-    }
-    const res = await fetch('/api/ai/status', { headers });
+    const res = await fetch('/api/ai/status');
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       return {
@@ -51,26 +63,21 @@ export async function checkGeminiStatus(customKey?: string): Promise<GeminiStatu
     return {
       configured: false,
       model: 'gemini-3.8-flash',
-      error: err?.message || 'Servidor indisponível',
+      error: err?.message || 'Servidor/Worker indisponível',
     };
   }
 }
 
-export async function testarConexaoGemini(customKey?: string): Promise<GeminiStatusResult> {
+export async function testarConexaoGemini(): Promise<GeminiStatusResult> {
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (customKey) {
-      headers['x-gemini-key'] = customKey;
-    }
+    const headers = await buildAuthHeaders();
     const res = await fetch('/api/ai/test', { method: 'POST', headers });
     if (!res.ok) {
-      return await checkGeminiStatus(customKey);
+      return await checkGeminiStatus();
     }
     return await res.json();
   } catch {
-    return await checkGeminiStatus(customKey);
+    return await checkGeminiStatus();
   }
 }
 
@@ -78,15 +85,9 @@ export async function gerarFechamentoGemini(
   orcamento: Orcamento,
   gatilho: string,
   tom: string,
-  empresa: ConfiguracaoEmpresa,
-  customKey?: string
+  empresa: ConfiguracaoEmpresa
 ): Promise<string> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (customKey) {
-    headers['x-gemini-key'] = customKey;
-  }
+  const headers = await buildAuthHeaders();
 
   const res = await fetch('/api/ai/fechar-orcamento', {
     method: 'POST',
@@ -111,15 +112,9 @@ export async function contornarObjecaoGemini(
   orcamento: Orcamento,
   objecao: string,
   contexto: string,
-  empresa: ConfiguracaoEmpresa,
-  customKey?: string
+  empresa: ConfiguracaoEmpresa
 ): Promise<string> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (customKey) {
-    headers['x-gemini-key'] = customKey;
-  }
+  const headers = await buildAuthHeaders();
 
   const res = await fetch('/api/ai/contornar-objecao', {
     method: 'POST',
@@ -143,15 +138,9 @@ export async function contornarObjecaoGemini(
 export async function gerarFollowUpGemini(
   orcamento: Orcamento,
   dias: number,
-  empresa: ConfiguracaoEmpresa,
-  customKey?: string
+  empresa: ConfiguracaoEmpresa
 ): Promise<string> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (customKey) {
-    headers['x-gemini-key'] = customKey;
-  }
+  const headers = await buildAuthHeaders();
 
   const res = await fetch('/api/ai/follow-up', {
     method: 'POST',
@@ -174,15 +163,9 @@ export async function gerarFollowUpGemini(
 export async function chatComGemini(
   message: string,
   context: any,
-  history: Array<{ role: 'user' | 'model'; text: string }>,
-  customKey?: string
+  history: Array<{ role: 'user' | 'model'; text: string }>
 ): Promise<string> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (customKey) {
-    headers['x-gemini-key'] = customKey;
-  }
+  const headers = await buildAuthHeaders();
 
   const res = await fetch('/api/ai/chat', {
     method: 'POST',
@@ -203,15 +186,9 @@ export async function chatComGemini(
 }
 
 export async function diagnosticoVendasGemini(
-  relatorio: any,
-  customKey?: string
-): Promise<string> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (customKey) {
-    headers['x-gemini-key'] = customKey;
-  }
+  relatorio: any
+): Promise<{ text: string; dataSource?: string }> {
+  const headers = await buildAuthHeaders();
 
   const res = await fetch('/api/ai/diagnostico-vendas', {
     method: 'POST',
@@ -226,5 +203,8 @@ export async function diagnosticoVendasGemini(
     throw new Error(parseAiError(data.error || 'Falha ao gerar diagnóstico com a API Gemini.'));
   }
 
-  return data.text;
+  return {
+    text: data.text,
+    dataSource: data.dataSource,
+  };
 }

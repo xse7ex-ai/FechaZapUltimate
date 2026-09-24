@@ -9,8 +9,9 @@ import {
   HelpCircle,
   Sun,
   Moon,
+  User,
 } from 'lucide-react';
-import { ActiveTab, ConfiguracaoEmpresa } from '../types';
+import { ActiveTab, ConfiguracaoEmpresa, TipoPlano } from '../types';
 import { useTheme } from '../context/ThemeContext';
 
 interface SidebarProps {
@@ -18,6 +19,8 @@ interface SidebarProps {
   setActiveTab: (tab: ActiveTab) => void;
   onOpenConfig: () => void;
   onOpenTutorial: () => void;
+  onOpenPerfil?: () => void;
+  userPlano?: TipoPlano;
   pendentesCount: number;
 }
 
@@ -26,6 +29,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   onOpenConfig,
   onOpenTutorial,
+  onOpenPerfil,
+  userPlano = 'GRATUITO',
   pendentesCount,
 }) => {
   const { theme, toggleTheme, isDark } = useTheme();
@@ -139,6 +144,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {isDark ? 'Escuro 🌙' : 'Claro ☀️'}
           </span>
         </button>
+
+        {onOpenPerfil && (
+          <button
+            onClick={onOpenPerfil}
+            className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition-colors group cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <User className="w-4 h-4 text-emerald-400" />
+              <span>Minha Conta & Plano</span>
+            </div>
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase ${
+              userPlano === 'TURBO'
+                ? 'bg-amber-400 text-slate-950'
+                : userPlano === 'PRO'
+                ? 'bg-emerald-500 text-white'
+                : 'bg-slate-800 text-slate-400'
+            }`}>
+              {userPlano}
+            </span>
+          </button>
+        )}
 
         <button
           onClick={onOpenConfig}

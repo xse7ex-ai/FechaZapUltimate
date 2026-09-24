@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Sparkles, Settings, Bell, HelpCircle, Sun, Moon } from 'lucide-react';
-import { ConfiguracaoEmpresa, Orcamento } from '../types';
+import { Plus, Sparkles, Settings, Bell, HelpCircle, Sun, Moon, User } from 'lucide-react';
+import { ConfiguracaoEmpresa, Orcamento, TipoPlano } from '../types';
 import { OrcamentoVencimentoInfo } from '../utils/validadeNotifications';
 import { NotificationDropdown } from './NotificationDropdown';
 import { useTheme } from '../context/ThemeContext';
@@ -11,6 +11,8 @@ interface TopbarProps {
   onOpenIA: () => void;
   onOpenConfig: () => void;
   onOpenTutorial: () => void;
+  onOpenPerfil?: () => void;
+  userPlano?: TipoPlano;
   geminiOnline: boolean;
   vencimentos: OrcamentoVencimentoInfo[];
   onOpenIAForOrcamento: (orcamentoId: string) => void;
@@ -24,6 +26,8 @@ export const Topbar: React.FC<TopbarProps> = ({
   onOpenIA,
   onOpenConfig,
   onOpenTutorial,
+  onOpenPerfil,
+  userPlano = 'GRATUITO',
   geminiOnline,
   vencimentos,
   onOpenIAForOrcamento,
@@ -48,8 +52,24 @@ export const Topbar: React.FC<TopbarProps> = ({
                 Fecha<span className="text-emerald-600 dark:text-emerald-400">Zap</span>
               </span>
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
-                v3.1.2
+                v3.1.4
               </span>
+              {onOpenPerfil && (
+                <button
+                  type="button"
+                  onClick={onOpenPerfil}
+                  title="Ver cota de IA e plano da conta"
+                  className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider transition-transform active:scale-95 cursor-pointer shrink-0 ${
+                    userPlano === 'TURBO'
+                      ? 'bg-amber-400 text-slate-950 shadow-xs'
+                      : userPlano === 'PRO'
+                      ? 'bg-emerald-500 text-white shadow-xs'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}
+                >
+                  {userPlano}
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 truncate">
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
@@ -87,6 +107,17 @@ export const Topbar: React.FC<TopbarProps> = ({
               <Moon className="w-5 h-5 text-slate-600 hover:text-slate-900 transition-colors" />
             )}
           </button>
+
+          {/* User Account & Plan Button */}
+          {onOpenPerfil && (
+            <button
+              onClick={onOpenPerfil}
+              title={`Conta & Plano: ${userPlano}`}
+              className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer"
+            >
+              <User className="w-5 h-5" />
+            </button>
+          )}
 
           {/* Notification Bell with Badge & Dropdown */}
           <div className="relative">

@@ -1,5 +1,6 @@
 import { Orcamento, ConfiguracaoEmpresa } from '../types';
 import { formatCurrency, formatDate, cleanPhone } from './format';
+import { getAuthToken } from './supabase';
 
 export function generateWhatsAppQuoteText(orcamento: Orcamento, empresa: ConfiguracaoEmpresa): string {
   const itemsText = orcamento.itens
@@ -52,4 +53,42 @@ export function generateWhatsAppUrl(phone: string, text: string): string {
 export function openWhatsAppMessage(phone: string, text: string): void {
   const url = generateWhatsAppUrl(phone, text);
   window.open(url, '_blank');
+}
+
+// Disparo seguro via Meta Cloud API através do Backend/Worker
+export async function sendWhatsAppViaApi(
+  to: string,
+  text: string,
+  orcamentoId?: string
+): Promise<{ success: boolean; provider: string; messageId?: string; error?: string; fallbackUrl?: string }> {
+  try {
+    const token = await getAuthToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch('/api/whatsapp/send', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        to,
+        message: text,
+        orcamentoId,
+      }),
+    });
+
+    const data = await res.json();
+    return data;
+  } catch (err: any) {
+    const phone = cleanPhone(to);
+    return {
+      success: false,
+      provider: 'local_error',
+      error: err?.message || 'Erro de rede',
+      fallbackUrl: generateWhatsAppUrl(phone, text),
+    };
+  }
 }
