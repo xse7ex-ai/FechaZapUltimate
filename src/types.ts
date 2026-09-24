@@ -55,6 +55,8 @@ export interface ConfiguracaoEmpresa {
   logoUrl?: string;
   mensagemPadraoWhatsapp: string;
   modeloIA: string;
+  whatsappToken?: string;
+  whatsappPhoneId?: string;
 }
 
 export type TipoPlano = 'GRATUITO' | 'PRO' | 'TURBO';

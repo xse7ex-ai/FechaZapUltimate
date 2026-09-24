@@ -12,6 +12,8 @@ export const INITIAL_EMPRESA_CONFIG: ConfiguracaoEmpresa = {
   cidadeEstado: 'São Paulo - SP',
   mensagemPadraoWhatsapp: 'Olá! Segue o seu orçamento solicitado.',
   modeloIA: 'gemini-3.8-flash',
+  whatsappToken: '',
+  whatsappPhoneId: '',
 };
 
 export const INITIAL_CLIENTES: Cliente[] = [

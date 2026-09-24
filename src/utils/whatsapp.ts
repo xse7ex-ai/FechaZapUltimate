@@ -55,40 +55,80 @@ export function openWhatsAppMessage(phone: string, text: string): void {
   window.open(url, '_blank');
 }
 
-// Disparo seguro via Meta Cloud API através do Backend/Worker
+// Disparo direto via Meta WhatsApp Cloud API utilizando as credenciais da empresa
 export async function sendWhatsAppViaApi(
   to: string,
   text: string,
+  empresa: ConfiguracaoEmpresa,
   orcamentoId?: string
 ): Promise<{ success: boolean; provider: string; messageId?: string; error?: string; fallbackUrl?: string }> {
-  try {
-    const token = await getAuthToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+  const phone = cleanPhone(to);
+  const fallbackUrl = generateWhatsAppUrl(phone, text);
+
+  // Validação amigável das credenciais da empresa (sem import.meta.env)
+  const token = empresa?.whatsappToken?.trim();
+  const phoneId = empresa?.whatsappPhoneId?.trim();
+
+  if (!token || !phoneId) {
+    return {
+      success: false,
+      provider: 'meta_cloud_api',
+      error: 'Credenciais da API do WhatsApp não configuradas. Acesse as Configurações da Empresa e preencha o Token de Acesso e o ID do Número de Telefone da Meta.',
+      fallbackUrl,
     };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  try {
+    let formattedPhone = phone;
+    if (!formattedPhone.startsWith('55') && formattedPhone.length >= 10 && formattedPhone.length <= 11) {
+      formattedPhone = `55${formattedPhone}`;
     }
 
-    const res = await fetch('/api/whatsapp/send', {
+    const url = `https://graph.facebook.com/v19.0/${phoneId}/messages`;
+    const res = await fetch(url, {
       method: 'POST',
-      headers,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
-        to,
-        message: text,
-        orcamentoId,
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: formattedPhone,
+        type: 'text',
+        text: {
+          preview_url: false,
+          body: text,
+        },
       }),
     });
 
     const data = await res.json();
-    return data;
+
+    if (!res.ok) {
+      const errorMessage = data?.error?.message || `Erro HTTP ${res.status} ao conectar à Meta API`;
+      return {
+        success: false,
+        provider: 'meta_cloud_api',
+        error: `Meta API: ${errorMessage}`,
+        fallbackUrl,
+      };
+    }
+
+    return {
+      success: true,
+      provider: 'meta_cloud_api',
+      messageId: data?.messages?.[0]?.id,
+    };
   } catch (err: any) {
-    const phone = cleanPhone(to);
     return {
       success: false,
-      provider: 'local_error',
-      error: err?.message || 'Erro de rede',
-      fallbackUrl: generateWhatsAppUrl(phone, text),
+      provider: 'meta_cloud_api',
+      error: err?.message || 'Falha de conexão com a API da Meta',
+      fallbackUrl,
     };
   }
 }
+
+export const sendWhatsAppMeta = sendWhatsAppViaApi;
+
