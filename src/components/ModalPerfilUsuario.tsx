@@ -132,7 +132,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                 </span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Autenticação Supabase, limite de IA e controle de assinaturas.
+                Gerencie sua conta, plano e limite de uso.
               </p>
             </div>
           </div>
@@ -307,24 +307,24 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                   ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/30 dark:bg-slate-800/90'
                   : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850'
               }`}>
-                <div>
-                  <div className="font-bold text-xs">GRATUITO</div>
-                  <div className="text-lg font-black text-slate-900 dark:text-slate-100 mt-1">R$ 0</div>
-                  <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5 mt-3">
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>10 IA / mês</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>PDF e WhatsApp</span>
-                    </li>
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Armazenamento local</span>
-                    </li>
-                  </ul>
-                </div>
+                 <div>
+                   <div className="font-bold text-xs">GRATUITO</div>
+                   <div className="text-lg font-black text-slate-900 dark:text-slate-100 mt-1">R$ 0</div>
+                   <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5 mt-3">
+                     <li className="flex items-center gap-1.5">
+                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                       <span>5 orçamentos / mês</span>
+                     </li>
+                     <li className="flex items-center gap-1.5">
+                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                       <span>PDF e WhatsApp</span>
+                     </li>
+                     <li className="flex items-center gap-1.5">
+                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                       <span>Dados salvos no seu celular</span>
+                     </li>
+                   </ul>
+                 </div>
                 {currentPlano === 'GRATUITO' && (
                   <span className="mt-3 text-[10px] font-bold text-emerald-600 text-center py-1 bg-emerald-100 dark:bg-emerald-950 rounded-lg">
                     Plano Atual
@@ -348,11 +348,11 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Copiloto Supabase</span>
+                      <span>Sincronização Segura na Nuvem</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Prioridade Cloudflare</span>
+                      <span>Processamento de Alta Velocidade</span>
                     </li>
                   </ul>
                 </div>
@@ -379,7 +379,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Meta WhatsApp API</span>
+                      <span>Automação Total de WhatsApp</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
