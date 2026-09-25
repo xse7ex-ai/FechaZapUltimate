@@ -74,7 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_clientes_user_id ON public.clientes(user_id);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_user_mes ON public.ai_usage(user_id, mes_referencia);
 
 -- 6. Trigger Automático para Criar Perfil ao Cadastrar Usuário no Supabase Auth
--- REGRA 3.1.5: Todo novo usuário é cadastrado OBRIGATORIAMENTE com plano GRATUITO.
+-- REGRA 3.1.5/3.1.6: Todo novo usuário é cadastrado OBRIGATORIAMENTE com plano GRATUITO.
 -- Metadados de plano enviados pelo cliente são expressamente ignorados.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
@@ -89,7 +89,7 @@ BEGIN
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -110,7 +110,7 @@ BEGIN
   NEW.updated_at := NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS trg_protect_profile_plan ON public.profiles;
 CREATE TRIGGER trg_protect_profile_plan
@@ -119,6 +119,7 @@ CREATE TRIGGER trg_protect_profile_plan
 
 -- 8. Função ATÔMICA e Transacional de Consumo de Quota de IA (Prevenção de Race Conditions)
 -- Executa com LOCK no perfil (FOR UPDATE), verifica o limite real e insere o log no mesmo passo.
+-- HARDENING 3.1.6: Executável EXCLUSIVAMENTE pelo service_role (backend/Worker).
 CREATE OR REPLACE FUNCTION public.consume_ai_quota(
   p_user_id UUID,
   p_tipo_operacao TEXT,
@@ -141,7 +142,7 @@ BEGIN
     v_plano := 'GRATUITO';
   END IF;
 
-  -- Define os limites formais da versão 3.1.5
+  -- Define os limites formais
   IF v_plano = 'TURBO' THEN
     v_limit := 1500;
   ELSIF v_plano = 'PRO' THEN
@@ -182,9 +183,14 @@ BEGIN
     'month', v_mes
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+-- Revogação estrita de execução direta por usuários ou clientes anônimos
+REVOKE EXECUTE ON FUNCTION public.consume_ai_quota(UUID, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.consume_ai_quota(UUID, TEXT, TEXT) TO service_role;
 
 -- 9. Função de Consulta Informativa de Quota (Read-only)
+-- HARDENING 3.1.6: Acesso restrito ao backend/service_role
 CREATE OR REPLACE FUNCTION public.check_ai_quota(user_uuid UUID)
 RETURNS JSONB AS $$
 DECLARE
@@ -220,7 +226,11 @@ BEGIN
     'month', v_mes
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+-- Revogação estrita de execução direta por usuários ou clientes anônimos
+REVOKE EXECUTE ON FUNCTION public.check_ai_quota(UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.check_ai_quota(UUID) TO service_role;
 
 -- 10. Ativação de Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;

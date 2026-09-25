@@ -1,4 +1,4 @@
-// Tipos para o Cloudflare Worker do FechaZap 3.1.5
+// Tipos para o Cloudflare Worker do FechaZap 3.1.6
 // Arquitetura Segura: Cloudflare Worker + Supabase Auth/PostgreSQL + Google Gemini + Meta WhatsApp
 
 export interface Env {
@@ -31,4 +31,17 @@ export interface QuotaCheckResult {
   limit: number;
   remaining?: number;
   month: string;
+}
+
+// Resultado do consumo atômico de quota no PostgreSQL via consume_ai_quota()
+// Falha estritamente FECHADA: ok=false gera HTTP 503; allowed=false gera HTTP 429
+export interface ConsumeQuotaResult {
+  ok: boolean;
+  allowed: boolean;
+  plano: TipoPlano;
+  used: number;
+  limit: number;
+  remaining?: number;
+  month: string;
+  error?: string;
 }

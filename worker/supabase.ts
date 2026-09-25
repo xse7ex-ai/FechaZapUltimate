@@ -1,14 +1,12 @@
-// Cloudflare Worker - Módulo de Autenticação Supabase, Planos e Quotas de IA (3.1.5)
-import { Env, UserAuthContext, QuotaCheckResult, TipoPlano } from './types';
+// Cloudflare Worker - Módulo de Autenticação Supabase, Planos e Quotas de IA (3.1.6)
+// HARDENING 3.1.6: Remoção total de fallbacks de quota. Falha estritamente FECHADA (Fail-Closed).
+import { Env, UserAuthContext, QuotaCheckResult, ConsumeQuotaResult, TipoPlano } from './types';
 
 export const QUOTA_LIMITS: Record<TipoPlano, number> = {
   GRATUITO: 10,
   PRO: 250,
   TURBO: 1500,
 };
-
-// Fallback in-memory para rastreamento de concorrência quando RPC não estiver disponível
-const localUsageCache = new Map<string, { count: number; month: string }>();
 
 export async function validateUserFromToken(
   env: Env,
@@ -103,32 +101,36 @@ export async function validateUserFromToken(
   }
 }
 
-// Consumo Atômico de Quota de IA (Prevenção de Race Conditions)
-// Invoca a função RPC transacional no Postgres com 'SELECT FOR UPDATE'
+// Consumo Atômico de Quota de IA (Prevenção Absoluta de Race Conditions)
+// Invoca exclusivamente a função RPC transacional no Postgres com 'SELECT FOR UPDATE'
+// REGRA 3.1.6: FALHA FECHADA. Se a RPC falhar, não estiver disponível ou der erro de rede,
+// retorna ok=false (HTTP 503). NÃO há fallback em memória, KV ou permissão silenciosa.
 export async function consumeAtomicAiQuota(
   env: Env,
   userId: string,
   tipoOperacao: string,
   modelo: string = 'gemini-3.8-flash'
-): Promise<QuotaCheckResult> {
+): Promise<ConsumeQuotaResult> {
   const currentMonth = new Date().toISOString().slice(0, 7);
 
-  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY || userId === 'anon') {
-    // Sem credenciais de banco ou usuário não autenticado: nega o acesso
+  // Sem credenciais do banco Supabase ou ID inválido -> FALHA FECHADA IMEDIATA
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY || !userId || userId === 'anon') {
     return {
+      ok: false,
       allowed: false,
       plano: 'GRATUITO',
-      used: 10,
+      used: 0,
       limit: 10,
       remaining: 0,
       month: currentMonth,
+      error: 'Serviço de quota temporariamente indisponível. Tente novamente em instantes.',
     };
   }
 
   const supabaseUrl = env.SUPABASE_URL.replace(/\/$/, '');
 
   try {
-    // Chama RPC atômica do Supabase
+    // Chama RPC atômica do Supabase protegida para service_role
     const rpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/consume_ai_quota`, {
       method: 'POST',
       headers: {
@@ -146,6 +148,7 @@ export async function consumeAtomicAiQuota(
     if (rpcRes.ok) {
       const data: any = await rpcRes.json();
       return {
+        ok: true,
         allowed: Boolean(data.allowed),
         plano: (data.plano as TipoPlano) || 'GRATUITO',
         used: Number(data.used) || 0,
@@ -153,113 +156,35 @@ export async function consumeAtomicAiQuota(
         remaining: Number(data.remaining) || 0,
         month: data.month || currentMonth,
       };
+    } else {
+      const errText = await rpcRes.text().catch(() => '');
+      console.error(`[Supabase RPC Error] consume_ai_quota falhou com HTTP ${rpcRes.status}:`, errText);
+      // FALHA FECHADA: Bloqueia consumo e retorna 503
+      return {
+        ok: false,
+        allowed: false,
+        plano: 'GRATUITO',
+        used: 0,
+        limit: 10,
+        remaining: 0,
+        month: currentMonth,
+        error: 'Serviço de quota temporariamente indisponível. Tente novamente em instantes.',
+      };
     }
-  } catch (err) {
-    console.warn('Erro ao chamar RPC consume_ai_quota, acionando fallback atômico:', err);
-  }
-
-  // Fallback seguro de auditoria caso o RPC não esteja deployado ainda no banco
-  return checkAndRecordFallbackQuota(env, userId, tipoOperacao, modelo, currentMonth);
-}
-
-// Fallback atômico em memória para ambientes de transição
-async function checkAndRecordFallbackQuota(
-  env: Env,
-  userId: string,
-  tipoOperacao: string,
-  modelo: string,
-  currentMonth: string
-): Promise<QuotaCheckResult> {
-  const supabaseUrl = env.SUPABASE_URL!.replace(/\/$/, '');
-
-  // 1. Descobre o plano real
-  let plano: TipoPlano = 'GRATUITO';
-  const profileRes = await fetch(
-    `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=plano`,
-    {
-      headers: {
-        apikey: env.SUPABASE_SERVICE_ROLE_KEY!,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      },
-    }
-  );
-  if (profileRes.ok) {
-    const profs: any[] = await profileRes.json();
-    if (profs.length > 0 && profs[0].plano) {
-      const p = String(profs[0].plano).toUpperCase();
-      if (p === 'PRO' || p === 'TURBO') plano = p;
-    }
-  }
-
-  const limit = QUOTA_LIMITS[plano];
-
-  // 2. Consulta uso atual
-  const countRes = await fetch(
-    `${supabaseUrl}/rest/v1/ai_usage?user_id=eq.${encodeURIComponent(userId)}&mes_referencia=eq.${currentMonth}&select=id`,
-    {
-      headers: {
-        apikey: env.SUPABASE_SERVICE_ROLE_KEY!,
-        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-        Prefer: 'count=exact',
-      },
-    }
-  );
-
-  let currentCount = 0;
-  if (countRes.ok) {
-    const range = countRes.headers.get('content-range');
-    if (range) {
-      const m = range.match(/\/(\d+)/);
-      if (m) currentCount = parseInt(m[1], 10);
-    }
-  }
-
-  // Verifica cache local para evitar race conditions em instâncias ativas
-  const key = `${userId}:${currentMonth}`;
-  const local = localUsageCache.get(key);
-  if (local && local.month === currentMonth && local.count > currentCount) {
-    currentCount = local.count;
-  }
-
-  if (currentCount >= limit) {
+  } catch (err: any) {
+    console.error('[Supabase RPC Exception] Falha de comunicação com consume_ai_quota:', err?.message || err);
+    // FALHA FECHADA: Erro de rede ou indisponibilidade bloqueia consumo com 503
     return {
+      ok: false,
       allowed: false,
-      plano,
-      used: currentCount,
-      limit,
+      plano: 'GRATUITO',
+      used: 0,
+      limit: 10,
       remaining: 0,
       month: currentMonth,
+      error: 'Serviço de quota temporariamente indisponível. Tente novamente em instantes.',
     };
   }
-
-  // Incrementa atomicamente antes de prosseguir
-  localUsageCache.set(key, { count: currentCount + 1, month: currentMonth });
-
-  // Grava log no Supabase
-  await fetch(`${supabaseUrl}/rest/v1/ai_usage`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY!,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      Prefer: 'return=minimal',
-    },
-    body: JSON.stringify({
-      user_id: userId,
-      tipo_operacao: tipoOperacao,
-      modelo,
-      mes_referencia: currentMonth,
-    }),
-  }).catch(() => {});
-
-  return {
-    allowed: true,
-    plano,
-    used: currentCount + 1,
-    limit,
-    remaining: limit - (currentCount + 1),
-    month: currentMonth,
-  };
 }
 
 // Consulta de quota informativa (Read-only para a rota /api/auth/me)
@@ -283,6 +208,33 @@ export async function getReadOnlyUserQuota(
 
   try {
     const supabaseUrl = env.SUPABASE_URL.replace(/\/$/, '');
+    
+    // Tenta primeiro via RPC check_ai_quota autorizada para service_role
+    const rpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/check_ai_quota`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({
+        user_uuid: user.id,
+      }),
+    });
+
+    if (rpcRes.ok) {
+      const data: any = await rpcRes.json();
+      return {
+        allowed: Boolean(data.allowed),
+        plano: (data.plano as TipoPlano) || user.plano,
+        used: Number(data.used) || 0,
+        limit: Number(data.limit) || limit,
+        remaining: Number(data.remaining) || 0,
+        month: data.month || currentMonth,
+      };
+    }
+
+    // Consulta de leitura de fallback apenas para display no GET /api/auth/me
     const countRes = await fetch(
       `${supabaseUrl}/rest/v1/ai_usage?user_id=eq.${encodeURIComponent(user.id)}&mes_referencia=eq.${currentMonth}&select=id`,
       {

@@ -170,8 +170,18 @@ export default {
         );
       }
 
-      // REGRA 6 & 8: Verificação e consumo atômico de quota ANTES de chamar IA
+      // REGRA 6 & 8 (3.1.6): Verificação e consumo atômico de quota via RPC com fail-closed
       const quota = await consumeAtomicAiQuota(env, user.id, 'fechar_orcamento', 'gemini-3.8-flash');
+      if (!quota.ok) {
+        return jsonResponse(
+          {
+            success: false,
+            error: quota.error || 'Serviço de quota temporariamente indisponível. Tente novamente em instantes.',
+          },
+          503,
+          origin
+        );
+      }
       if (!quota.allowed) {
         return jsonResponse(
           {
@@ -283,6 +293,16 @@ Crie a mensagem pronta para envio no WhatsApp:`;
       }
 
       const quota = await consumeAtomicAiQuota(env, user.id, 'contornar_objecao', 'gemini-3.8-flash');
+      if (!quota.ok) {
+        return jsonResponse(
+          {
+            success: false,
+            error: quota.error || 'Serviço de quota temporariamente indisponível. Tente novamente em instantes.',
+          },
+          503,
+          origin
+        );
+      }
       if (!quota.allowed) {
         return jsonResponse(
           {
@@ -386,6 +406,16 @@ Opção 2: Resposta focada em custo do erro/qualidade e garantia.`;
       }
 
       const quota = await consumeAtomicAiQuota(env, user.id, 'follow_up', 'gemini-3.8-flash');
+      if (!quota.ok) {
+        return jsonResponse(
+          {
+            success: false,
+            error: quota.error || 'Serviço de quota temporariamente indisponível. Tente novamente em instantes.',
+          },
+          503,
+          origin
+        );
+      }
       if (!quota.allowed) {
         return jsonResponse(
           {
@@ -480,6 +510,16 @@ Requisitos:
       }
 
       const quota = await consumeAtomicAiQuota(env, user.id, 'chat', 'gemini-3.8-flash');
+      if (!quota.ok) {
+        return jsonResponse(
+          {
+            success: false,
+            error: quota.error || 'Serviço de quota temporariamente indisponível. Tente novamente em instantes.',
+          },
+          503,
+          origin
+        );
+      }
       if (!quota.allowed) {
         return jsonResponse(
           {
@@ -566,6 +606,16 @@ Sempre responda em português brasileiro, de forma direta, prática e objetiva.`
       }
 
       const quota = await consumeAtomicAiQuota(env, user.id, 'diagnostico_vendas', 'gemini-3.8-flash');
+      if (!quota.ok) {
+        return jsonResponse(
+          {
+            success: false,
+            error: quota.error || 'Serviço de quota temporariamente indisponível. Tente novamente em instantes.',
+          },
+          503,
+          origin
+        );
+      }
       if (!quota.allowed) {
         return jsonResponse(
           {

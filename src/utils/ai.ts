@@ -16,6 +16,9 @@ export interface GeminiStatusResult {
 export function parseAiError(errData: any): string {
   if (!errData) return 'Erro ao comunicar com o serviço de IA.';
   if (typeof errData === 'string') {
+    if (errData.includes('Serviço de quota temporariamente indisponível') || errData.includes('quota temporariamente indisponível')) {
+      return 'Serviço de quota temporariamente indisponível. Tente novamente em instantes.';
+    }
     if (errData.includes('503') || errData.includes('high demand') || errData.includes('UNAVAILABLE')) {
       return 'Os servidores do Google Gemini estão com alta demanda temporária. O FechaZap ativou o modo de contingência.';
     }
