@@ -6,6 +6,7 @@ import {
   BarChart3,
   Sparkles,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { ActiveTab } from '../types';
 
 interface BottomNavProps {
@@ -19,17 +20,36 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   setActiveTab,
   pendentesCount,
 }) => {
+  const { t } = useTranslation();
+
   const items = [
-    { id: 'dashboard' as ActiveTab, label: 'Início', icon: LayoutDashboard },
+    {
+      id: 'dashboard' as ActiveTab,
+      label: t('nav.dashboard', 'Início'),
+      icon: LayoutDashboard,
+    },
     {
       id: 'orcamentos' as ActiveTab,
-      label: 'Orçamentos',
+      label: t('nav.orcamentos', 'Orçamentos'),
       icon: FileText,
       badge: pendentesCount > 0 ? pendentesCount : null,
     },
-    { id: 'ia' as ActiveTab, label: 'Gemini IA', icon: Sparkles, highlight: true },
-    { id: 'clientes' as ActiveTab, label: 'Clientes', icon: Users },
-    { id: 'relatorios' as ActiveTab, label: 'Relatórios', icon: BarChart3 },
+    {
+      id: 'ia' as ActiveTab,
+      label: t('nav.ia', 'Gemini IA'),
+      icon: Sparkles,
+      highlight: true,
+    },
+    {
+      id: 'clientes' as ActiveTab,
+      label: t('nav.clientes', 'Clientes'),
+      icon: Users,
+    },
+    {
+      id: 'relatorios' as ActiveTab,
+      label: t('nav.relatorios', 'Relatórios'),
+      icon: BarChart3,
+    },
   ];
 
   return (

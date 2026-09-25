@@ -1,0 +1,9 @@
+{
+  "nav": {
+    "dashboard": "Home",
+    "orcamentos": "Quotes",
+    "ia": "Gemini AI",
+    "clientes": "Clients",
+    "relatorios": "Reports"
+  }
+}

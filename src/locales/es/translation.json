@@ -1,0 +1,9 @@
+{
+  "nav": {
+    "dashboard": "Inicio",
+    "orcamentos": "Presupuestos",
+    "ia": "Gemini IA",
+    "clientes": "Clientes",
+    "relatorios": "Informes"
+  }
+}

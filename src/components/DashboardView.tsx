@@ -203,27 +203,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <span>Funil de Status das Propostas</span>
         </h3>
         <div className="grid grid-cols-4 gap-2 text-center text-xs">
-          <div className="p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
-            <span className="block text-[11px] font-bold text-amber-800 dark:text-amber-400 uppercase">Pendentes</span>
-            <span className="text-lg font-black text-amber-900 dark:text-amber-200">
+          <div className="flex flex-col items-center justify-center text-center p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
+            <span className="block text-[11px] font-bold text-amber-800 dark:text-amber-400 uppercase text-center">Pendentes</span>
+            <span className="text-lg font-black text-amber-900 dark:text-amber-200 text-center">
               {orcamentos.filter((o) => o.status === 'pendente').length}
             </span>
           </div>
-          <div className="p-3 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50">
-            <span className="block text-[11px] font-bold text-blue-800 dark:text-blue-400 uppercase">Enviados</span>
-            <span className="text-lg font-black text-blue-900 dark:text-blue-200">
+          <div className="flex flex-col items-center justify-center text-center p-3 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50">
+            <span className="block text-[11px] font-bold text-blue-800 dark:text-blue-400 uppercase text-center">Enviados</span>
+            <span className="text-lg font-black text-blue-900 dark:text-blue-200 text-center">
               {orcamentos.filter((o) => o.status === 'enviado').length}
             </span>
           </div>
-          <div className="p-3 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50">
-            <span className="block text-[11px] font-bold text-emerald-800 dark:text-emerald-400 uppercase">Aprovados</span>
-            <span className="text-lg font-black text-emerald-900 dark:text-emerald-200">
+          <div className="flex flex-col items-center justify-center text-center p-3 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50">
+            <span className="block text-[11px] font-bold text-emerald-800 dark:text-emerald-400 uppercase text-center">Aprovados</span>
+            <span className="text-lg font-black text-emerald-900 dark:text-emerald-200 text-center">
               {orcAprovados.length}
             </span>
           </div>
-          <div className="p-3 rounded-xl bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/50">
-            <span className="block text-[11px] font-bold text-rose-800 dark:text-rose-400 uppercase">Recusados</span>
-            <span className="text-lg font-black text-rose-900 dark:text-rose-200">
+          <div className="flex flex-col items-center justify-center text-center p-3 rounded-xl bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/50">
+            <span className="block text-[11px] font-bold text-rose-800 dark:text-rose-400 uppercase text-center">Recusados</span>
+            <span className="text-lg font-black text-rose-900 dark:text-rose-200 text-center">
               {orcRecusados.length}
             </span>
           </div>
