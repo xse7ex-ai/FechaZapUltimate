@@ -15,6 +15,8 @@ import {
   MessageSquare,
   Eye,
   EyeOff,
+  Info,
+  User,
 } from 'lucide-react';
 import { ConfiguracaoEmpresa } from '../types';
 import { testarConexaoGemini, GeminiStatusResult } from '../utils/ai';
@@ -27,6 +29,8 @@ interface ModalConfiguracoesProps {
   onSave: (config: ConfiguracaoEmpresa) => void;
   onShowToast: (title: string, desc?: string, type?: 'success' | 'error' | 'info') => void;
   onOpenTutorial?: () => void;
+  onOpenPerfil?: () => void;
+  userPlano?: string;
 }
 
 export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
@@ -36,6 +40,8 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
   onSave,
   onShowToast,
   onOpenTutorial,
+  onOpenPerfil,
+  userPlano = 'GRATUITO',
 }) => {
   const [formData, setFormData] = useState<ConfiguracaoEmpresa>({ ...empresa });
   const [testingAi, setTestingAi] = useState<boolean>(false);
@@ -475,6 +481,56 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
               </button>
             </div>
           )}
+
+          {/* SEÇÃO INFORMAÇÕES DO APLICATIVO / SOBRE */}
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
+                  Sobre o Aplicativo
+                </span>
+              </div>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                v3.1.6
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="p-2.5 rounded-lg bg-white dark:bg-slate-850 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                <span className="text-slate-500 dark:text-slate-400">Versão:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">3.1.6</span>
+              </div>
+              <div className="p-2.5 rounded-lg bg-white dark:bg-slate-850 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                <span className="text-slate-500 dark:text-slate-400">Plano Atual:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">{userPlano}</span>
+              </div>
+              <div className="p-2.5 rounded-lg bg-white dark:bg-slate-850 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                <span className="text-slate-500 dark:text-slate-400">Motor de IA:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">Google Gemini 3.8 Flash</span>
+              </div>
+              <div className="p-2.5 rounded-lg bg-white dark:bg-slate-850 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                <span className="text-slate-500 dark:text-slate-400">Arquitetura:</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">Cloudflare Worker + Supabase</span>
+              </div>
+            </div>
+
+            {onOpenPerfil && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenPerfil();
+                  }}
+                  className="w-full py-2 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <User className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Gerenciar Conta, Planos & Cotas de IA</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Action Buttons */}
           <div className="flex items-center justify-end gap-3 pt-2">

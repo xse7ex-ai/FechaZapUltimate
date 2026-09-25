@@ -470,6 +470,8 @@ export default function App() {
         onSave={(newEmpresa) => setEmpresa(newEmpresa)}
         onShowToast={addToast}
         onOpenTutorial={() => setIsTutorialOpen(true)}
+        onOpenPerfil={() => setIsPerfilOpen(true)}
+        userPlano={userPlano}
       />
 
       <ModalPerfilUsuario
