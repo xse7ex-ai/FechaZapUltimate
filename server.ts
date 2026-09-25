@@ -24,7 +24,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+function getPort(): number {
+  const portArgIdx = process.argv.indexOf('--port');
+  if (portArgIdx !== -1 && process.argv[portArgIdx + 1]) {
+    const val = parseInt(process.argv[portArgIdx + 1], 10);
+    if (!isNaN(val)) return val;
+  }
+  return Number(process.env.PORT) || 3000;
+}
+
+function getHost(): string {
+  const hostArgIdx = process.argv.indexOf('--host');
+  if (hostArgIdx !== -1 && process.argv[hostArgIdx + 1]) {
+    return process.argv[hostArgIdx + 1];
+  }
+  return '0.0.0.0';
+}
+
+const PORT = getPort();
+const HOST = getHost();
 
 app.use(express.json());
 
@@ -93,7 +112,11 @@ async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false, // Desativa HMR WebSocket para evitar conflito de portas no container
+        watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -104,8 +127,8 @@ async function startServer() {
     });
   }
 
-  app.listen(Number(PORT), '0.0.0.0', () => {
-    console.log(`🚀 FechaZap 3.1.5 Server rodando em http://0.0.0.0:${PORT} (Worker Adapter Ativo)`);
+  app.listen(PORT, HOST, () => {
+    console.log(`🚀 FechaZap 3.1.5 Server rodando em http://${HOST}:${PORT} (Worker Adapter Ativo)`);
   });
 }
 
