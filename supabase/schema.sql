@@ -61,10 +61,33 @@ CREATE TABLE IF NOT EXISTS public.orcamentos (
 CREATE TABLE IF NOT EXISTS public.ai_usage (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  tipo_operacao TEXT NOT NULL, -- 'fechar_orcamento', 'contornar_objecao', 'follow_up', 'chat', 'diagnostico_vendas'
+  tipo_operacao TEXT NOT NULL, -- 'fechar_orcamento', 'contornar_objecao', 'follow_up', 'chat', 'diagnostico_vendas', 'whatsapp_followup_turbo'
   modelo TEXT NOT NULL DEFAULT 'gemini-3.8-flash',
   mes_referencia TEXT NOT NULL, -- formato 'YYYY-MM', ex: '2026-09'
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 6. Tabela de Configurações da Empresa e Integrações (WhatsApp Meta Cloud API)
+CREATE TABLE IF NOT EXISTS public.configuracoes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  nome_fantasia TEXT,
+  razao_social TEXT,
+  cnpj TEXT,
+  telefone TEXT,
+  email TEXT,
+  chave_pix TEXT,
+  tipo_chave_pix TEXT DEFAULT 'cpf',
+  endereco TEXT,
+  cidade_estado TEXT,
+  logo_url TEXT,
+  mensagem_padrao_whatsapp TEXT,
+  modelo_ia TEXT DEFAULT 'gemini-3.8-flash',
+  whatsapp_token TEXT,
+  whatsapp_phone_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_configuracoes_user_id UNIQUE (user_id)
 );
 
 -- Índices de Performance
@@ -72,6 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_orcamentos_user_id ON public.orcamentos(user_id);
 CREATE INDEX IF NOT EXISTS idx_orcamentos_status ON public.orcamentos(status);
 CREATE INDEX IF NOT EXISTS idx_clientes_user_id ON public.clientes(user_id);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_user_mes ON public.ai_usage(user_id, mes_referencia);
+CREATE INDEX IF NOT EXISTS idx_configuracoes_user_id ON public.configuracoes(user_id);
 
 -- 6. Trigger Automático para Criar Perfil ao Cadastrar Usuário no Supabase Auth
 -- REGRA 3.1.5/3.1.6: Todo novo usuário é cadastrado OBRIGATORIAMENTE com plano GRATUITO.
@@ -237,6 +261,7 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orcamentos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.configuracoes ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de Acesso Seguro (RLS)
 -- Perfis: Usuário vê e edita apenas seu próprio perfil
@@ -266,4 +291,10 @@ CREATE POLICY "Usuário gerencia próprios orçamentos"
 DROP POLICY IF EXISTS "Usuário visualiza seu uso de IA" ON public.ai_usage;
 CREATE POLICY "Usuário visualiza seu uso de IA"
   ON public.ai_usage FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Configurações: Usuário gerencia apenas suas próprias configurações
+DROP POLICY IF EXISTS "Usuário gerencia próprias configurações" ON public.configuracoes;
+CREATE POLICY "Usuário gerencia próprias configurações"
+  ON public.configuracoes FOR ALL
   USING (auth.uid() = user_id);

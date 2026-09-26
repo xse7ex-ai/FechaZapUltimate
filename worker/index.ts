@@ -3,6 +3,7 @@
 import { Env } from './types';
 import {
   generateContentWithGemini,
+  generateFollowUpMessage,
   fallbackFechamento,
   fallbackObjecao,
   fallbackFollowUp,
@@ -15,6 +16,8 @@ import {
   getReadOnlyUserQuota,
   fetchRealUserSalesContext,
   fetchUserOrcamentoById,
+  getUserProfile,
+  fetchUserConfiguracoes,
 } from './supabase';
 import { sendMetaWhatsAppMessage } from './whatsapp';
 
@@ -695,7 +698,163 @@ Use formato limpo com marcadores.`;
     // WHATSAPP API (Meta Cloud API Server-side)
     // =========================================================================
 
-    // 9. Envio via Meta WhatsApp Cloud API
+    // 9. Assistente de Follow-up Inteligente via WhatsApp (Exclusivo para Plano TURBO)
+    if ((pathname === '/api/whatsapp/followup' || pathname === '/api/whatsapp/follow-up') && method === 'POST') {
+      // 1. Extração e validação do JWT
+      const authHeader = request.headers.get('Authorization');
+      const user = await validateUserFromToken(env, authHeader);
+
+      if (!user.isAuthed || user.id === 'anon') {
+        return jsonResponse(
+          {
+            success: false,
+            error: 'Não autorizado. JWT ausente ou inválido.',
+          },
+          401,
+          origin
+        );
+      }
+
+      // 2. Extração de parâmetros do body
+      const body: any = await request.json().catch(() => ({}));
+      const orcamentoId = body?.orcamentoId;
+
+      if (!orcamentoId || typeof orcamentoId !== 'string') {
+        return jsonResponse(
+          {
+            success: false,
+            error: 'O parâmetro "orcamentoId" é obrigatório no corpo da requisição.',
+          },
+          400,
+          origin
+        );
+      }
+
+      // 3. Validação de Segurança (CRÍTICO): Consulta oficial na tabela profiles para garantir plano 'TURBO'
+      const profile = await getUserProfile(env, user.id);
+      const planoEfetivo = profile?.plano || user.plano;
+
+      if (planoEfetivo !== 'TURBO') {
+        return jsonResponse(
+          {
+            success: false,
+            error: 'Acesso negado. O assistente de follow-up inteligente via WhatsApp com IA é um recurso exclusivo para assinantes do plano TURBO.',
+            code: 'PLAN_TURBO_REQUIRED',
+            planoAtual: planoEfetivo,
+            planoNecessario: 'TURBO',
+          },
+          403,
+          origin
+        );
+      }
+
+      // 4. Consumo Atômico de Quota de IA (Prevenção Absoluta de Race Conditions via Postgres RPC)
+      const quota = await consumeAtomicAiQuota(env, user.id, 'whatsapp_followup_turbo', 'gemini-3.8-flash');
+      if (!quota.ok) {
+        return jsonResponse(
+          {
+            success: false,
+            error: quota.error || 'Serviço de quota temporariamente indisponível. Tente novamente em instantes.',
+          },
+          503,
+          origin
+        );
+      }
+
+      if (!quota.allowed) {
+        return jsonResponse(
+          {
+            success: false,
+            error: `Limite mensal de IA atingido para o plano ${quota.plano} (${quota.used}/${quota.limit}).`,
+            quotaExceeded: true,
+            quota,
+          },
+          429,
+          origin
+        );
+      }
+
+      // 5. Busca de Dados: SELECT na tabela orçamentos com filtro user_id (Isolamento de Locatário)
+      const orcamento = await fetchUserOrcamentoById(env, user.id, orcamentoId);
+      if (!orcamento) {
+        return jsonResponse(
+          {
+            success: false,
+            error: 'Orçamento não encontrado ou não pertence ao seu usuário.',
+          },
+          404,
+          origin
+        );
+      }
+
+      const telefoneDestino = orcamento.cliente_telefone || orcamento.clienteTelefone || body.to;
+      if (!telefoneDestino) {
+        return jsonResponse(
+          {
+            success: false,
+            error: 'O cliente deste orçamento não possui número de telefone/WhatsApp cadastrado para receber o follow-up.',
+          },
+          400,
+          origin
+        );
+      }
+
+      // 6. Consulta das configurações do usuário (credenciais da Meta API e dados da empresa)
+      const userConfig = await fetchUserConfiguracoes(env, user.id);
+      const empresaContext = {
+        nomeFantasia: userConfig?.nomeFantasia || profile?.nome || user.nome || 'Nossa Empresa',
+        chavePix: userConfig?.chavePix,
+      };
+
+      // 7. Geração de mensagem de follow-up persuasiva, curta e natural via Gemini (com fallback seguro)
+      const aiResult = await generateFollowUpMessage(
+        env.GEMINI_API_KEY || '',
+        orcamento,
+        empresaContext
+      );
+      const messageText = aiResult.text;
+
+      // 8. Integração com Meta Cloud API utilizando o token e ID do telefone configurados pelo usuário na tabela de configurações
+      const token = userConfig?.whatsappToken || body.whatsappToken;
+      const phoneNumberId = userConfig?.whatsappPhoneId || body.whatsappPhoneId;
+
+      const whatsappResult = await sendMetaWhatsAppMessage(
+        env,
+        user,
+        {
+          to: telefoneDestino,
+          text: messageText,
+          orcamentoId,
+          token,
+          phoneNumberId,
+        },
+        clientIp
+      );
+
+      return jsonResponse(
+        {
+          success: whatsappResult.success,
+          messageId: whatsappResult.messageId,
+          text: messageText,
+          model: aiResult.model,
+          provider: whatsappResult.provider,
+          error: whatsappResult.error,
+          fallbackUrl: whatsappResult.fallbackUrl,
+          statusCode: whatsappResult.statusCode,
+          quotaRemaining: quota.remaining,
+          orcamento: {
+            id: orcamento.id,
+            numero: orcamento.numero,
+            clienteNome: orcamento.cliente_nome || orcamento.clienteNome,
+            clienteTelefone: telefoneDestino,
+          },
+        },
+        whatsappResult.statusCode,
+        origin
+      );
+    }
+
+    // 10. Envio via Meta WhatsApp Cloud API
     if (pathname === '/api/whatsapp/send' && method === 'POST') {
       const authHeader = request.headers.get('Authorization');
       const user = await validateUserFromToken(env, authHeader);

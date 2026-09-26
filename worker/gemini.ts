@@ -196,12 +196,12 @@ O que acha de darmos esse passo juntos com uma condição especial para começar
 }
 
 export function fallbackFollowUp(orcamento: any, dias: number, empresa: any): string {
-  const cliente = orcamento?.clienteNome || 'Cliente';
-  const total = Number(orcamento?.valorTotal || 0).toLocaleString('pt-BR', {
+  const cliente = orcamento?.clienteNome || orcamento?.cliente_nome || 'Cliente';
+  const total = Number(orcamento?.valorTotal || orcamento?.valor_total || 0).toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   });
-  const empresaNome = empresa?.nomeFantasia || 'Nossa Empresa';
+  const empresaNome = empresa?.nomeFantasia || empresa?.nome_fantasia || 'Nossa Empresa';
 
   return `Olá, *${cliente}*! Tudo bem? Aqui é da *${empresaNome}*. 🤝
 
@@ -210,6 +210,64 @@ Passando apenas para saber se conseguiu dar uma olhada na proposta de *${total}*
 Ficou alguma dúvida sobre os serviços ou condições de pagamento? Posso ajustar para você se precisar.
 
 Me dá um retorno assim que puder! 😊`;
+}
+
+// Assistente Inteligente de Follow-up para WhatsApp (Plano TURBO)
+// Gera mensagem de follow-up persuasiva, curta e natural com chamada para fechamento
+export async function generateFollowUpMessage(
+  apiKey: string,
+  orcamento: any,
+  empresa?: any
+): Promise<{ text: string; model: string }> {
+  const clienteNome = orcamento?.cliente_nome || orcamento?.clienteNome || 'Cliente';
+  const numero = orcamento?.numero || '';
+  const total = Number(orcamento?.valor_total || orcamento?.valorTotal || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+  const empresaNome = empresa?.nome_fantasia || empresa?.nomeFantasia || 'Nossa Empresa';
+
+  const systemInstruction = `Você é um assistente comercial de alta conversão especialista em follow-up pelo WhatsApp para prestadores de serviços e autônomos.
+Sua missão: criar uma mensagem de follow-up persuasiva, acolhedora, curta e 100% natural para envio no WhatsApp.
+Diretrizes:
+- Tom amigável, confiável e profissional.
+- Pergunte diretamente e com leveza se o cliente tem alguma dúvida para fechar o serviço ou dar o próximo passo.
+- Limite-se a 2 ou 3 parágrafos curtos, ideais para leitura rápida no celular.
+- Destaque termos importantes com *negrito* do WhatsApp.
+- NÃO invente prazos, itens ou valores além dos informados.
+- Retorne SOMENTE a mensagem final pronta para envio, sem introduções como "Aqui está a mensagem:".`;
+
+  const prompt = `Gere uma mensagem persuasiva de follow-up para WhatsApp referente a este orçamento:
+- Cliente: ${clienteNome}
+- Proposta Número: #${numero}
+- Valor Total: ${total}
+- Forma de Pagamento: ${orcamento?.forma_pagamento || orcamento?.formaPagamento || 'A combinar'}
+- Prazo Estimado: ${orcamento?.prazo_entrega || orcamento?.prazoEntrega || 'A combinar'}
+- Empresa: ${empresaNome}
+
+Objetivo: Saber se o cliente conseguiu avaliar a proposta e perguntar de forma natural se restou alguma dúvida para fecharmos o serviço.`;
+
+  if (apiKey && apiKey.trim().length > 0) {
+    try {
+      const result = await generateContentWithGemini(apiKey, prompt, {
+        systemInstruction,
+        temperature: 0.65,
+      });
+
+      if (result && result.text) {
+        return result;
+      }
+    } catch (err: any) {
+      console.warn('Erro ao gerar mensagem de follow-up com Gemini, acionando contingência:', err?.message);
+    }
+  }
+
+  // Contingência de alta disponibilidade
+  const fallbackText = fallbackFollowUp(orcamento, 2, empresa);
+  return {
+    text: fallbackText,
+    model: 'fechazap-contingencia',
+  };
 }
 
 export function fallbackChat(_message: string): string {

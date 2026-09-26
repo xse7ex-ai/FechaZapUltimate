@@ -44,7 +44,13 @@ export function cleanPhoneNumber(phone: string): string {
 export async function sendMetaWhatsAppMessage(
   env: Env,
   user: UserAuthContext,
-  payload: { to: string; text: string; orcamentoId?: string },
+  payload: {
+    to: string;
+    text: string;
+    orcamentoId?: string;
+    token?: string;
+    phoneNumberId?: string;
+  },
   clientIp: string = ''
 ): Promise<{
   success: boolean;
@@ -92,12 +98,15 @@ export async function sendMetaWhatsAppMessage(
     };
   }
 
-  // 4. Verificação de credenciais seguras do ambiente
-  if (!env.WHATSAPP_TOKEN || !env.PHONE_NUMBER_ID) {
+  // 4. Verificação de credenciais: prioriza credenciais da tabela de configurações do usuário, com fallback para variáveis do ambiente
+  const apiToken = (payload.token && payload.token.trim().length > 0) ? payload.token.trim() : env.WHATSAPP_TOKEN;
+  const apiPhoneId = (payload.phoneNumberId && payload.phoneNumberId.trim().length > 0) ? payload.phoneNumberId.trim() : env.PHONE_NUMBER_ID;
+
+  if (!apiToken || !apiPhoneId) {
     return {
       success: false,
       provider: 'meta_not_configured',
-      error: 'Meta WhatsApp Cloud API não configurada no servidor (WHATSAPP_TOKEN ou PHONE_NUMBER_ID ausentes). Utilize o link direto.',
+      error: 'Meta WhatsApp Cloud API não configurada (Token de acesso ou ID do telefone ausentes nas configurações da empresa e no servidor). Utilize o link direto.',
       fallbackUrl,
       statusCode: 503,
     };
@@ -105,12 +114,12 @@ export async function sendMetaWhatsAppMessage(
 
   // 5. Chamada Segura à Graph API Oficial da Meta
   try {
-    const url = `https://graph.facebook.com/v19.0/${env.PHONE_NUMBER_ID}/messages`;
+    const url = `https://graph.facebook.com/v19.0/${apiPhoneId}/messages`;
     const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${env.WHATSAPP_TOKEN}`,
+        Authorization: `Bearer ${apiToken}`,
       },
       body: JSON.stringify({
         messaging_product: 'whatsapp',

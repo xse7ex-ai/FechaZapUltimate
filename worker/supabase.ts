@@ -363,3 +363,89 @@ export async function fetchUserOrcamentoById(
     return null;
   }
 }
+
+// Perfil Oficial do Usuário (Validação Estrita de Segurança para Plano TURBO)
+export async function getUserProfile(
+  env: Env,
+  userId: string
+): Promise<{ id: string; email: string; nome?: string; plano: TipoPlano } | null> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY || !userId || userId === 'anon') {
+    return null;
+  }
+
+  try {
+    const supabaseUrl = env.SUPABASE_URL.replace(/\/$/, '');
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,email,nome,plano`,
+      {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      }
+    );
+
+    if (!res.ok) return null;
+    const profiles: any[] = await res.json();
+    if (!Array.isArray(profiles) || profiles.length === 0) return null;
+
+    const row = profiles[0];
+    const rawPlano = String(row.plano || 'GRATUITO').toUpperCase().trim();
+    const plano: TipoPlano = rawPlano === 'TURBO' ? 'TURBO' : rawPlano === 'PRO' ? 'PRO' : 'GRATUITO';
+
+    return {
+      id: row.id,
+      email: row.email || '',
+      nome: row.nome,
+      plano,
+    };
+  } catch (err) {
+    console.error('Erro ao consultar perfil de usuário no Supabase:', err);
+    return null;
+  }
+}
+
+// Configurações do Usuário (WhatsApp Token, Phone Number ID e Dados da Empresa)
+export async function fetchUserConfiguracoes(
+  env: Env,
+  userId: string
+): Promise<{
+  whatsappToken?: string;
+  whatsappPhoneId?: string;
+  nomeFantasia?: string;
+  chavePix?: string;
+} | null> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY || !userId || userId === 'anon') {
+    return null;
+  }
+
+  try {
+    const supabaseUrl = env.SUPABASE_URL.replace(/\/$/, '');
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/configuracoes?user_id=eq.${encodeURIComponent(userId)}&select=*`,
+      {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      }
+    );
+
+    if (res.ok) {
+      const rows: any[] = await res.json();
+      if (Array.isArray(rows) && rows.length > 0) {
+        const c = rows[0];
+        return {
+          whatsappToken: c.whatsapp_token || c.whatsappToken,
+          whatsappPhoneId: c.whatsapp_phone_id || c.whatsappPhoneId,
+          nomeFantasia: c.nome_fantasia || c.nomeFantasia,
+          chavePix: c.chave_pix || c.chavePix,
+        };
+      }
+    }
+    return null;
+  } catch (err) {
+    console.warn('Erro ao consultar tabela de configurações no Supabase:', err);
+    return null;
+  }
+}
