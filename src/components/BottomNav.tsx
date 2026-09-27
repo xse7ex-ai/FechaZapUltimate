@@ -5,52 +5,91 @@ import {
   Users,
   BarChart3,
   Sparkles,
+  MessageSquare,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { ActiveTab } from '../types';
+import { ActiveTab, TipoPlano } from '../types';
 
 interface BottomNavProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   pendentesCount: number;
+  userPlano?: TipoPlano;
+  unreadMensagensCount?: number;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
   activeTab,
   setActiveTab,
   pendentesCount,
+  userPlano = 'GRATUITO',
+  unreadMensagensCount = 0,
 }) => {
   const { t } = useTranslation();
 
-  const items = [
-    {
-      id: 'dashboard' as ActiveTab,
-      label: t('nav.dashboard', 'Início'),
-      icon: LayoutDashboard,
-    },
-    {
-      id: 'orcamentos' as ActiveTab,
-      label: t('nav.orcamentos', 'Orçamentos'),
-      icon: FileText,
-      badge: pendentesCount > 0 ? pendentesCount : null,
-    },
-    {
-      id: 'ia' as ActiveTab,
-      label: t('nav.ia', 'Gemini IA'),
-      icon: Sparkles,
-      highlight: true,
-    },
-    {
-      id: 'clientes' as ActiveTab,
-      label: t('nav.clientes', 'Clientes'),
-      icon: Users,
-    },
-    {
-      id: 'relatorios' as ActiveTab,
-      label: t('nav.relatorios', 'Relatórios'),
-      icon: BarChart3,
-    },
-  ];
+  const isTurbo = userPlano === 'TURBO';
+
+  const items = isTurbo
+    ? [
+        {
+          id: 'dashboard' as ActiveTab,
+          label: t('nav.dashboard', 'Início'),
+          icon: LayoutDashboard,
+        },
+        {
+          id: 'orcamentos' as ActiveTab,
+          label: t('nav.orcamentos', 'Orçamentos'),
+          icon: FileText,
+          badge: pendentesCount > 0 ? pendentesCount : null,
+        },
+        {
+          id: 'mensagens' as ActiveTab,
+          label: 'Respostas',
+          icon: MessageSquare,
+          badge: unreadMensagensCount > 0 ? unreadMensagensCount : null,
+          badgeColor: 'bg-emerald-500',
+        },
+        {
+          id: 'ia' as ActiveTab,
+          label: t('nav.ia', 'Gemini IA'),
+          icon: Sparkles,
+          highlight: true,
+        },
+        {
+          id: 'clientes' as ActiveTab,
+          label: t('nav.clientes', 'Clientes'),
+          icon: Users,
+        },
+      ]
+    : [
+        {
+          id: 'dashboard' as ActiveTab,
+          label: t('nav.dashboard', 'Início'),
+          icon: LayoutDashboard,
+        },
+        {
+          id: 'orcamentos' as ActiveTab,
+          label: t('nav.orcamentos', 'Orçamentos'),
+          icon: FileText,
+          badge: pendentesCount > 0 ? pendentesCount : null,
+        },
+        {
+          id: 'ia' as ActiveTab,
+          label: t('nav.ia', 'Gemini IA'),
+          icon: Sparkles,
+          highlight: true,
+        },
+        {
+          id: 'clientes' as ActiveTab,
+          label: t('nav.clientes', 'Clientes'),
+          icon: Users,
+        },
+        {
+          id: 'relatorios' as ActiveTab,
+          label: t('nav.relatorios', 'Relatórios'),
+          icon: BarChart3,
+        },
+      ];
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 px-2 py-1.5 flex items-center justify-around">

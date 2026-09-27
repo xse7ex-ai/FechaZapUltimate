@@ -1,21 +1,23 @@
 # Relatório Técnico Oficial - FechaZap PWA
 
-**Versão da Arquitetura:** 3.2.0 (Supabase Edge Functions + Sincronização em Nuvem PRO/TURBO + Offline-First)  
+**Versão da Arquitetura:** 3.3.0 (Supabase Edge Functions + Inbound WhatsApp Webhook + Caixa de Entrada TURBO + Sincronização em Nuvem PRO/TURBO)  
 **Stack Principal:** React 19, TypeScript, Vite, Tailwind CSS, Supabase (PostgreSQL + RLS + Auth + Edge Functions), Google Gemini 3.8 Flash, Meta Cloud API.
 
 ---
 
 ## 1. Visão Geral da Arquitetura
 
-O **FechaZap** opera sob uma arquitetura limpa, sem dependência de Cloudflare Workers ou servidores intermediários Express:
+O **FechaZap** opera sob uma arquitetura serverless moderna e sem dependência de Cloudflare Workers ou servidores intermediários Express:
 
 ```
 [ Cliente PWA / Netlify ] 
    ├── Estado Local Otimista (localStorage) para velocidade instantânea e offline
    ├── Sincronização Direta Supabase Client (PRO e TURBO) com RLS por user_id
+   ├── Caixa de Entrada WhatsApp (Exclusiva TURBO) com indicador de não lidas e wa.me
    └── Invocação de Supabase Edge Functions:
          ├── 'fecha-ia' (Gemini 3.8 Flash - Exclusivo TURBO)
-         └── 'whatsapp-followup' (Meta Cloud API / Link wa.me - Exclusivo TURBO)
+         ├── 'whatsapp-followup' (Disparo Meta Cloud API / Link wa.me - Exclusivo TURBO)
+         └── 'whatsapp-webhook' (Receptor oficial Inbound da Meta Cloud API)
 ```
 
 ---
@@ -35,57 +37,86 @@ Os diferenciais de cada plano foram rigorosamente implementados no client e no b
 | **Criação de Propostas por Voz/Texto** | Não | Não | **Sim (Gemini 3.8 Flash)** |
 | **Análise Histórica de Preços** | Não | Não | **Sim (Gemini 3.8 Flash)** |
 | **Follow-up Automático no WhatsApp** | Não | Não | **Sim (Meta API + Fallback)** |
+| **Caixa de Entrada de Respostas WhatsApp** | Não (conversas no zap pessoal) | Não (conversas no zap pessoal) | **Sim (Centralizada no App)** |
 
 ---
 
-## 3. Sincronização Real na Nuvem (PRO e TURBO)
+## 3. Inbound Webhook do WhatsApp (`whatsapp-webhook`)
 
-- **Arquitetura Offline-First Otimista (`src/utils/sync.ts`):**
-  - Toda operação de criação, alteração ou exclusão de orçamento/cliente atualiza o estado local e o `localStorage` imediatamente.
-  - Para usuários **PRO** e **TURBO**, os dados são sincronizados diretamente com as tabelas `public.orcamentos` e `public.clientes` do Supabase via client autenticado.
-  - Se a rede estiver indisponível ou a chamada falhar, a operação é enfileirada no `fechazap_pending_sync_queue_v1` e reprocessada assim que a conexão retornar (evento `online`).
-- **Isolamento por Usuário (RLS):**
-  - Todas as tabelas têm políticas de Row Level Security vinculadas a `auth.uid() = user_id`.
-- **Plano GRATUITO:**
-  - 100% local no `localStorage`, sem disparar requisições para as tabelas do Supabase. O limite de 5 orçamentos por mês é verificado diretamente na interface do client.
+Para fechar o ciclo de vendas dos usuários do plano **TURBO**, foi criada a Edge Function `whatsapp-webhook`:
 
----
-
-## 4. WhatsApp: Conta Única e Fallback Universal
-
-- As credenciais da Meta (`WHATSAPP_TOKEN`, `PHONE_NUMBER_ID`, `WHATSAPP_TEMPLATE_NAME`) são segredos exclusivos do servidor (lidos em variáveis de ambiente da Edge Function). O cliente nunca envia credenciais sensíveis no corpo da requisição.
-- **Fallback Universal (`wa.me`):** Se os segredos da Meta não estiverem configurados ou se o envio da API falhar, a função retorna automaticamente uma URL direta (`https://wa.me/...`) com a mensagem persuasiva pré-formatada. Isso garante 100% de disponibilidade para qualquer prestador de serviços.
+1. **GET (Handshake & Verificação da Meta):**
+   - Responde com o valor de `hub.challenge` em texto puro se `hub.verify_token === WHATSAPP_VERIFY_TOKEN`.
+   - Rejeita com HTTP 403 caso o token seja inválido ou o segredo não esteja configurado.
+2. **POST (Mensagens Recebidas):**
+   - **Validação Criptográfica:** Valida o cabeçalho `X-Hub-Signature-256` via HMAC-SHA256 usando o segredo `WHATSAPP_APP_SECRET`.
+   - **Resiliência e SLA:** Responde HTTP 200 rapidamente à Meta para evitar reenvios desnecessários ou desativação do webhook.
+   - **Idempotência Rigorosa:** Utiliza `wa_message_id` (ID oficial da mensagem gerado pela Meta) para ignorar mensagens já processadas.
+   - **Descoberta do Dono (Prestador):** Compara o telefone do remetente (normalizado com DDI 55) com `cliente_telefone` na tabela `orcamentos` e `telefone` na tabela `clientes`. Se não encontrar nenhum prestador cadastrado, descarta a mensagem silenciosamente sem poluir o sistema.
+   - **Gravação Segura:** Insere na tabela `public.mensagens_whatsapp` via credencial `service_role`.
 
 ---
 
-## 5. Limpeza Realizada no Projeto
+## 4. Tabela `public.mensagens_whatsapp` e Segurança (RLS)
 
-1. **Arquivos Obsoletos Removidos da Raiz:**
-   - `RELATORIO_FECHAZAP_3.1.4.md`, `RELATORIO_FECHAZAP_3.1.5.md`, `RELATORIO_FECHAZAP_3.1.6.md` (removidos e substituídos por este documento único).
-   - `FechaZap_3.1.6.zip` (arquivo duplicado removido).
-   - `bun.lock` (projeto utiliza npm).
-2. **Dependências Desnecessárias Removidas do `package.json`:**
-   - `express`, `@types/express`, `dotenv`, `tsx`, `esbuild`.
+- **Campos:**
+  - `id`: identificador único do registro (TEXT / UUID).
+  - `user_id`: UUID do prestador dono da mensagem (NOT NULL, FK `auth.users`).
+  - `cliente_telefone`: telefone formatado/limpo do remetente.
+  - `cliente_nome`: nome informado pelo contato da Meta ou pelo cadastro de clientes.
+  - `corpo`: texto da mensagem enviada pelo cliente.
+  - `lida`: booleano indicando status de leitura (default `false`).
+  - `wa_message_id`: identificador único da Meta (UNIQUE).
+  - `orcamento_id`: vínculo opcional com a proposta mais recente (FK `orcamentos`, `ON DELETE SET NULL`).
+  - `created_at`: data/hora de recebimento.
+- **Políticas de Row Level Security (RLS):**
+  - **SELECT:** Usuário autenticado visualiza somente suas próprias mensagens (`auth.uid() = user_id`).
+  - **UPDATE:** Usuário autenticado pode atualizar apenas o campo `lida` das suas próprias mensagens.
+  - **INSERT:** Estritamente proibido para clientes autenticados e anônimos. Apenas a Edge Function autenticada com `service_role` possui permissão de escrita.
+- **Índices de Performance:**
+  - `(user_id, lida)` para contagem ultra rápida de não lidas.
+  - `cliente_telefone` para buscas rápidas.
+  - `created_at DESC` para ordenação temporal.
+
+---
+
+## 5. Caixa de Entrada no Frontend (Exclusiva TURBO)
+
+- **Componente `src/components/MensagensView.tsx`:**
+  - Exibido nos menus (Sidebar e BottomNav) com indicador visual de mensagens não lidas.
+  - Se um usuário `GRATUITO` ou `PRO` acessar, uma tela explicativa apresenta o diferencial do plano TURBO e oferece botão de upgrade.
+  - Listagem com filtro por busca textual e aba de "Apenas Não Lidas".
+  - Identificação visual imediata de mensagens não lidas com dot luminoso e destaque.
+  - Vínculo direto com o orçamento relacionado (botão de atalho para abrir os detalhes da proposta).
+  - Botão **"Responder no WhatsApp"**: ao clicar, marca a mensagem como lida e abre o link `https://wa.me/<telefone>` para que o prestador responda manualmente pelo WhatsApp. Não há disparo automático por IA de respostas recebidas (preservando o controle humano do prestador).
 
 ---
 
 ## 6. Auditoria Honesta: O que foi Testado vs O que Depende de Configuração Externa
 
 ### ✅ Testado e Validado Efetivamente no Ambiente:
-1. **Compilação e Build de Produção (`vite build`):** Executado com sucesso, gerando assets otimizados em `dist/`.
-2. **Tipagem e Linting Estrito (`tsc --noEmit`):** 0 erros de tipagem em todo o projeto TypeScript.
-3. **Gate de Exportação de PDF:** Bloqueio aplicado em `ModalDetalhes.tsx` quando `userPlano === 'GRATUITO'` com toast explicativo e chamada do modal de planos; liberação para `PRO` e `TURBO`.
-4. **Placeholder de Anúncio (`AdBanner.tsx`):** Criado com layout limpo e discreto no rodapé do dashboard, renderizado condicionalmente apenas para usuários `GRATUITO`.
-5. **Mapeamento e Fila Offline (`src/utils/sync.ts`):** Funções de mapeamento de tipos DB <-> Frontend, manipulação da fila offline e verificação de plano.
-6. **Esquema SQL (`supabase/schema.sql`):** Atualizado com compatibilidade flexível de IDs (`TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text`) prevenindo erros de conversão de identificadores locais.
+1. **Compilação e Build de Produção (`vite build`):** Executado com sucesso, sem qualquer erro de bundle ou empacotamento.
+2. **Tipagem Estrita (`tsc --noEmit`):** 0 erros TypeScript no projeto.
+3. **Lógica de Normalização Telefônica (`cleanPhoneNumber`):** Testada contra números com/sem DDI 55 e com/sem máscara de formatação (`(11) 98888-7777`, `11988887777`, `5511988887777`).
+4. **Validação Criptográfica HMAC-SHA256:** Testada em script Node/Web Crypto simulando o cabeçalho `sha256=<hex>` da Meta com chave válida e inválida.
+5. **Simulação de Roteamento Multi-prestador:** Validado o algoritmo que prioriza o prestador com o orçamento/cadastro mais recente e descarta números não cadastrados.
+6. **Interface e Contador de Não Lidas:** Integrado à Sidebar e à BottomNav com visualização condicionada ao plano `TURBO`.
 
-### ⏳ Dependências de Configuração Externa (Produção / Usuário):
-1. **Credenciais do Supabase em Produção:** No Netlify ou ambiente de hospedagem, configurar `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
-2. **Execução do `supabase/schema.sql`:** Executar o script no SQL Editor do painel do Supabase para criar as tabelas, triggers e RLS.
-3. **Deploy das Edge Functions:** Executar `supabase functions deploy fecha-ia` e `supabase functions deploy whatsapp-followup`.
-4. **Segredos no Supabase:** Configurar via `supabase secrets set`:
-   - `GEMINI_API_KEY`
-   - `WHATSAPP_TOKEN`
-   - `PHONE_NUMBER_ID`
-   - `WHATSAPP_TEMPLATE_NAME`
-5. **Aprovação do Template na Meta:** O envio direto pela Meta Cloud API exige template aprovado com as variáveis `{{1}}` (cliente), `{{2}}` (serviço) e `{{3}}` (valor). Enquanto o template estiver em análise ou se não houver token, o app usa o fallback automático `wa.me`.
+### ⚠️ Limitação Técnica Documentada:
+- **Colisão de Clientes em Múltiplos Prestadores:** Como o FechaZap utiliza uma conta centralizada de WhatsApp Business da plataforma, se o mesmo número de cliente final tiver solicitado orçamentos para mais de um prestador cadastrado no sistema, a mensagem recebida no webhook será roteada para o prestador que tiver a interação mais recente (último orçamento gerado ou cliente cadastrado). Essa é uma limitação inerente ao modelo de conta única compartilhada da Meta Cloud API.
+
+### ⏳ Dependências de Configuração Externa (Produção / Meta / Supabase):
+1. **Configuração da URL de Callback no Painel da Meta:**
+   - No portal Meta for Developers -> WhatsApp -> Configuration:
+   - **Callback URL:** `https://<PROJECT_REF>.supabase.co/functions/v1/whatsapp-webhook`
+   - **Verify Token:** Definir um token seguro e cadastrá-lo como secret `WHATSAPP_VERIFY_TOKEN` no Supabase.
+   - **Campos de Webhook inscritos:** Marcar o campo `messages`.
+2. **Segredos no Supabase (`supabase secrets set`):**
+   - `WHATSAPP_VERIFY_TOKEN`: Token de verificação escolhido para a Meta.
+   - `WHATSAPP_APP_SECRET`: App Secret do aplicativo Meta para validação HMAC do header `X-Hub-Signature-256`.
+   - `WHATSAPP_TOKEN` e `PHONE_NUMBER_ID`: Credenciais de envio da conta WhatsApp Business.
+   - `GEMINI_API_KEY`: Chave da API Google Gemini para as funções de IA do TURBO.
+3. **Deploy da Edge Function:**
+   - Executar: `supabase functions deploy whatsapp-webhook`
+4. **Execução do `supabase/schema.sql`:**
+   - Rodar o script atualizado no SQL Editor do Supabase para criar a tabela `mensagens_whatsapp`, políticas de RLS e o helper `find_whatsapp_message_owner`.

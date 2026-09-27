@@ -83,4 +83,16 @@ export interface GatilhoIA {
   exemplo: string;
 }
 
-export type ActiveTab = 'dashboard' | 'orcamentos' | 'clientes' | 'relatorios' | 'ia';
+export interface MensagemWhatsApp {
+  id: string;
+  userId: string;
+  clienteTelefone: string;
+  clienteNome?: string;
+  corpo: string;
+  lida: boolean;
+  waMessageId?: string;
+  orcamentoId?: string;
+  createdAt: string;
+}
+
+export type ActiveTab = 'dashboard' | 'orcamentos' | 'clientes' | 'relatorios' | 'ia' | 'mensagens';

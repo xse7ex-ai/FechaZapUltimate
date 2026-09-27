@@ -91,7 +91,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold mb-2">
-              <Sparkles className="w-3.5 h-3.5" />
+              <CheckCircle2 className="w-3.5 h-3.5" />
               <span>Google Gemini 3.8 Flash Integrado</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight">

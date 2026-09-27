@@ -92,6 +92,19 @@ CREATE TABLE IF NOT EXISTS public.configuracoes (
   CONSTRAINT uq_configuracoes_user_id UNIQUE (user_id)
 );
 
+-- 7. Tabela de Mensagens Recebidas via WhatsApp (Exclusivo para Plano TURBO)
+CREATE TABLE IF NOT EXISTS public.mensagens_whatsapp (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  cliente_telefone TEXT NOT NULL,
+  cliente_nome TEXT,
+  corpo TEXT NOT NULL,
+  lida BOOLEAN NOT NULL DEFAULT false,
+  wa_message_id TEXT UNIQUE,
+  orcamento_id TEXT REFERENCES public.orcamentos(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Índices de Performance
 CREATE INDEX IF NOT EXISTS idx_profiles_plano ON public.profiles(plano);
 CREATE INDEX IF NOT EXISTS idx_clientes_user_id ON public.clientes(user_id);
@@ -100,6 +113,9 @@ CREATE INDEX IF NOT EXISTS idx_orcamentos_status ON public.orcamentos(status);
 CREATE INDEX IF NOT EXISTS idx_orcamentos_user_status ON public.orcamentos(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_user_mes ON public.ai_usage(user_id, mes_referencia);
 CREATE INDEX IF NOT EXISTS idx_configuracoes_user_id ON public.configuracoes(user_id);
+CREATE INDEX IF NOT EXISTS idx_mensagens_whatsapp_user_lida ON public.mensagens_whatsapp(user_id, lida);
+CREATE INDEX IF NOT EXISTS idx_mensagens_whatsapp_cliente_telefone ON public.mensagens_whatsapp(cliente_telefone);
+CREATE INDEX IF NOT EXISTS idx_mensagens_whatsapp_created_at ON public.mensagens_whatsapp(created_at DESC);
 
 -- 7. Trigger Automático para Criar Perfil ao Cadastrar Usuário no Supabase Auth
 -- REGRA DE NEGÓCIO: Todo novo usuário é cadastrado OBRIGATORIAMENTE com plano GRATUITO.
@@ -348,3 +364,84 @@ DROP POLICY IF EXISTS "Usuário gerencia próprias configurações" ON public.co
 CREATE POLICY "Usuário gerencia próprias configurações"
   ON public.configuracoes FOR ALL
   USING (auth.uid() = user_id);
+
+-- 13. Ativação de RLS e Políticas para Mensagens Recebidas do WhatsApp (Exclusivo TURBO)
+ALTER TABLE public.mensagens_whatsapp ENABLE ROW LEVEL SECURITY;
+
+-- Usuário autenticado lê apenas as mensagens direcionadas a ele
+DROP POLICY IF EXISTS "Usuário lê próprias mensagens whatsapp" ON public.mensagens_whatsapp;
+CREATE POLICY "Usuário lê próprias mensagens whatsapp"
+  ON public.mensagens_whatsapp FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Usuário autenticado pode atualizar apenas o status 'lida' das próprias mensagens
+DROP POLICY IF EXISTS "Usuário atualiza status lida de suas mensagens" ON public.mensagens_whatsapp;
+CREATE POLICY "Usuário atualiza status lida de suas mensagens"
+  ON public.mensagens_whatsapp FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Permissões estritas:
+-- INSERT NUNCA é permitido para o cliente diretamente (bloqueio total).
+-- Somente a Edge Function (via service_role) pode inserir mensagens recebidas da Meta.
+REVOKE ALL ON public.mensagens_whatsapp FROM PUBLIC, anon;
+GRANT SELECT, UPDATE (lida) ON public.mensagens_whatsapp TO authenticated;
+GRANT ALL ON public.mensagens_whatsapp TO service_role;
+
+-- 14. Função Auxiliar: Descoberta do Prestador (Dono) de Mensagem Inbound
+-- Compara o telefone recebido com 'cliente_telefone' em orcamentos ou 'telefone' em clientes.
+-- Se houver colisão de clientes em prestadores diferentes, prioriza o cadastro/orçamento mais recente.
+CREATE OR REPLACE FUNCTION public.find_whatsapp_message_owner(p_clean_phone TEXT)
+RETURNS TABLE (
+  user_id UUID,
+  cliente_nome TEXT,
+  orcamento_id TEXT,
+  created_at TIMESTAMPTZ
+) AS $$
+DECLARE
+  v_phone_digits TEXT;
+  v_last_digits TEXT;
+BEGIN
+  -- Extrai apenas dígitos
+  v_phone_digits := regexp_replace(p_clean_phone, '\D', '', 'g');
+
+  -- Normaliza para os últimos 8 dígitos para cobrir variações de DDD, 9º dígito e DDI
+  IF length(v_phone_digits) >= 8 THEN
+    v_last_digits := substring(v_phone_digits from length(v_phone_digits) - 7);
+  ELSE
+    v_last_digits := v_phone_digits;
+  END IF;
+
+  RETURN QUERY
+  WITH candidates AS (
+    -- Prioridade 1: Orçamentos vinculados
+    SELECT 
+      o.user_id,
+      o.cliente_nome,
+      o.id AS orcamento_id,
+      o.created_at,
+      1 AS priority
+    FROM public.orcamentos o
+    WHERE regexp_replace(o.cliente_telefone, '\D', '', 'g') LIKE '%' || v_last_digits
+    
+    UNION ALL
+    
+    -- Prioridade 2: Cadastro de Clientes
+    SELECT 
+      c.user_id,
+      c.nome AS cliente_nome,
+      NULL::TEXT AS orcamento_id,
+      c.created_at,
+      2 AS priority
+    FROM public.clientes c
+    WHERE regexp_replace(c.telefone, '\D', '', 'g') LIKE '%' || v_last_digits
+  )
+  SELECT c.user_id, c.cliente_nome, c.orcamento_id, c.created_at
+  FROM candidates c
+  ORDER BY c.created_at DESC, c.priority ASC
+  LIMIT 1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+REVOKE ALL ON FUNCTION public.find_whatsapp_message_owner(TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.find_whatsapp_message_owner(TEXT) TO service_role;

@@ -10,6 +10,7 @@ import {
   Sun,
   Moon,
   User,
+  MessageSquare,
 } from 'lucide-react';
 import { ActiveTab, ConfiguracaoEmpresa, TipoPlano } from '../types';
 import { useTheme } from '../context/ThemeContext';
@@ -22,6 +23,7 @@ interface SidebarProps {
   onOpenPerfil?: () => void;
   userPlano?: TipoPlano;
   pendentesCount: number;
+  unreadMensagensCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -32,11 +34,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenPerfil,
   userPlano = 'GRATUITO',
   pendentesCount,
+  unreadMensagensCount = 0,
 }) => {
   const { theme, toggleTheme, isDark } = useTheme();
 
   const menuItems = [
-
     {
       id: 'dashboard' as ActiveTab,
       label: 'Visão Geral',
@@ -49,6 +51,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: FileText,
       badge: pendentesCount > 0 ? `${pendentesCount} abertos` : null,
     },
+    ...(userPlano === 'TURBO'
+      ? [
+          {
+            id: 'mensagens' as ActiveTab,
+            label: 'Respostas WhatsApp',
+            icon: MessageSquare,
+            badge: unreadMensagensCount > 0 ? `${unreadMensagensCount} nova(s)` : null,
+            badgeColor: 'bg-emerald-500 text-white shadow-xs',
+          },
+        ]
+      : []),
     {
       id: 'clientes' as ActiveTab,
       label: 'Clientes',

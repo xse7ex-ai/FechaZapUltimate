@@ -34,7 +34,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   const urgentCount = vencimentos.length;
 
   return (
-    <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-2.5 sm:px-6 lg:px-8 py-2 sm:py-2.5 transition-colors overflow-x-clip">
+    <header className={`sticky top-0 ${isNotificationOpen ? 'z-50' : 'z-30'} bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800/80 px-2.5 sm:px-6 lg:px-8 py-2 sm:py-2.5 transition-colors`}>
       <div className="flex items-center justify-between gap-1.5 sm:gap-4 max-w-7xl mx-auto w-full">
         {/* Left: LOGO */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 shrink-0">

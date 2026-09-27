@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { UserProfile, UserQuota, TipoPlano } from '../types';
+import { UserProfile, UserQuota, TipoPlano, MensagemWhatsApp } from '../types';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -223,3 +223,87 @@ export async function logoutUser(): Promise<void> {
   localStorage.removeItem('fechazap_auth_token');
   localStorage.removeItem('fechazap_auth_user');
 }
+
+/**
+ * Busca as mensagens recebidas via WhatsApp na tabela public.mensagens_whatsapp
+ * Exclusivo para usuários no plano TURBO.
+ */
+export async function fetchMensagensWhatsApp(): Promise<MensagemWhatsApp[]> {
+  if (!client) {
+    try {
+      const raw = localStorage.getItem('fechazap_mensagens_whatsapp');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  try {
+    const { data: authData } = await client.auth.getUser();
+    if (!authData?.user) {
+      const raw = localStorage.getItem('fechazap_mensagens_whatsapp');
+      return raw ? JSON.parse(raw) : [];
+    }
+
+    const { data, error } = await client
+      .from('mensagens_whatsapp')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Erro ao carregar mensagens do WhatsApp:', error);
+      const raw = localStorage.getItem('fechazap_mensagens_whatsapp');
+      return raw ? JSON.parse(raw) : [];
+    }
+
+    const mapped: MensagemWhatsApp[] = (data || []).map((row: any) => ({
+      id: String(row.id),
+      userId: String(row.user_id),
+      clienteTelefone: row.cliente_telefone,
+      clienteNome: row.cliente_nome || undefined,
+      corpo: row.corpo,
+      lida: Boolean(row.lida),
+      waMessageId: row.wa_message_id || undefined,
+      orcamentoId: row.orcamento_id || undefined,
+      createdAt: row.created_at,
+    }));
+
+    localStorage.setItem('fechazap_mensagens_whatsapp', JSON.stringify(mapped));
+    return mapped;
+  } catch (err) {
+    console.warn('Exceção ao buscar mensagens do WhatsApp:', err);
+    const raw = localStorage.getItem('fechazap_mensagens_whatsapp');
+    return raw ? JSON.parse(raw) : [];
+  }
+}
+
+/**
+ * Marca uma mensagem como lida no Supabase e no cache local
+ */
+export async function markMensagemAsRead(mensagemId: string): Promise<boolean> {
+  // Atualiza cache local
+  try {
+    const raw = localStorage.getItem('fechazap_mensagens_whatsapp');
+    if (raw) {
+      const list: MensagemWhatsApp[] = JSON.parse(raw);
+      const updated = list.map((m) => (m.id === mensagemId ? { ...m, lida: true } : m));
+      localStorage.setItem('fechazap_mensagens_whatsapp', JSON.stringify(updated));
+    }
+  } catch {
+    // ignore
+  }
+
+  if (!client) return true;
+
+  try {
+    const { error } = await client
+      .from('mensagens_whatsapp')
+      .update({ lida: true })
+      .eq('id', mensagemId);
+
+    return !error;
+  } catch {
+    return false;
+  }
+}
+

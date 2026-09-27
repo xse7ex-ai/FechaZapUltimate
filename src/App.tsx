@@ -11,6 +11,7 @@ import {
   ActiveTab,
   StatusOrcamento,
   TipoPlano,
+  MensagemWhatsApp,
 } from './types';
 import {
   INITIAL_ORCAMENTOS,
@@ -24,6 +25,7 @@ import { DashboardView } from './components/DashboardView';
 import { OrcamentosView } from './components/OrcamentosView';
 import { ClientesView } from './components/ClientesView';
 import { RelatoriosView } from './components/RelatoriosView';
+import { MensagensView } from './components/MensagensView';
 import { ModalIA } from './components/ModalIA';
 import { ModalNovoOrcamento } from './components/ModalNovoOrcamento';
 import { ModalDetalhes } from './components/ModalDetalhes';
@@ -33,7 +35,11 @@ import { TutorialModal } from './components/TutorialModal';
 import { Toast, ToastMessage } from './components/Toast';
 import { NotificationBanner } from './components/NotificationBanner';
 import { checkGeminiStatus } from './utils/ai';
-import { fetchServerUserProfileAndQuota } from './utils/supabase';
+import {
+  fetchServerUserProfileAndQuota,
+  fetchMensagensWhatsApp,
+  markMensagemAsRead,
+} from './utils/supabase';
 import { generateUUID } from './utils/uuid';
 import {
   isCloudSyncEnabled,
@@ -98,6 +104,39 @@ export default function App() {
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
   const [isPerfilOpen, setIsPerfilOpen] = useState<boolean>(false);
   const [userPlano, setUserPlano] = useState<TipoPlano>('GRATUITO');
+
+  // WhatsApp Inbound Messages (Caixa de Entrada Exclusiva TURBO)
+  const [mensagens, setMensagens] = useState<MensagemWhatsApp[]>(() => {
+    try {
+      const saved = localStorage.getItem('fechazap_mensagens_whatsapp');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const unreadMensagensCount = useMemo(() => {
+    if (userPlano !== 'TURBO') return 0;
+    return mensagens.filter((m) => !m.lida).length;
+  }, [mensagens, userPlano]);
+
+  const loadMensagens = async () => {
+    if (userPlano === 'TURBO') {
+      try {
+        const msgs = await fetchMensagensWhatsApp();
+        setMensagens(msgs);
+      } catch (err) {
+        console.warn('Erro ao carregar mensagens:', err);
+      }
+    }
+  };
+
+  const handleMarkMensagemAsRead = async (id: string) => {
+    setMensagens((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, lida: true } : m))
+    );
+    await markMensagemAsRead(id);
+  };
 
   // Selected items
   const [selectedOrcamento, setSelectedOrcamento] = useState<Orcamento | null>(null);
@@ -170,6 +209,9 @@ export default function App() {
         if (isCloudSyncEnabled(data.user.plano)) {
           syncWithCloud(data.user.plano);
         }
+        if (data.user.plano === 'TURBO') {
+          fetchMensagensWhatsApp().then(setMensagens).catch(() => {});
+        }
       })
       .catch(() => {
         setUserPlano('GRATUITO');
@@ -179,6 +221,15 @@ export default function App() {
   useEffect(() => {
     loadUserProfile();
   }, []);
+
+  // Polling de mensagens recebidas para plano TURBO
+  useEffect(() => {
+    if (userPlano === 'TURBO') {
+      loadMensagens();
+      const interval = setInterval(loadMensagens, 20000);
+      return () => clearInterval(interval);
+    }
+  }, [userPlano]);
 
   // Listener para reprocessar fila quando a conexão cair e voltar
   useEffect(() => {
@@ -475,6 +526,7 @@ export default function App() {
           onOpenPerfil={() => setIsPerfilOpen(true)}
           userPlano={userPlano}
           pendentesCount={pendentesCount}
+          unreadMensagensCount={unreadMensagensCount}
         />
 
         {/* Main Content Area */}
@@ -506,6 +558,19 @@ export default function App() {
               onDuplicateOrcamento={handleDuplicateOrcamento}
               onOpenIAForOrcamento={handleOpenIAForOrcamento}
               onUpdateStatus={handleUpdateStatus}
+              onShowToast={addToast}
+            />
+          )}
+
+          {activeTab === 'mensagens' && (
+            <MensagensView
+              mensagens={mensagens}
+              onMarkAsRead={handleMarkMensagemAsRead}
+              onRefresh={loadMensagens}
+              userPlano={userPlano}
+              onOpenPerfil={() => setIsPerfilOpen(true)}
+              orcamentos={orcamentos}
+              onViewOrcamento={handleViewOrcamento}
               onShowToast={addToast}
             />
           )}
@@ -546,6 +611,8 @@ export default function App() {
           }
         }}
         pendentesCount={pendentesCount}
+        userPlano={userPlano}
+        unreadMensagensCount={unreadMensagensCount}
       />
 
       {/* Modals */}
