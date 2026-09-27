@@ -4,13 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "vite",
     "build": "vite build",
-    "build:worker": "esbuild worker/index.ts --bundle --format=esm --outfile=dist/worker.js --target=es2022 --platform=neutral",
-    "deploy:worker": "wrangler deploy",
-    "start": "node dist/server.js",
     "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
+    "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,6 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { UserProfile, UserQuota, TipoPlano } from '../types';
-import { getApiUrl } from './apiConfig';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -50,40 +49,65 @@ export async function getAuthToken(): Promise<string | null> {
   }
 }
 
-// Obtém perfil e cota real do servidor
+// Obtém perfil e cota real do servidor diretamente pelo Supabase Client
 export async function fetchServerUserProfileAndQuota(): Promise<{
   authenticated: boolean;
   user: UserProfile;
   quota: UserQuota;
 }> {
-  const token = await getAuthToken();
-  const headers: Record<string, string> = {};
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  if (client) {
+    try {
+      const { data: authData } = await client.auth.getUser();
+      if (authData?.user) {
+        const u = authData.user;
+        const { data: profile } = await client
+          .from('profiles')
+          .select('id, email, nome, plano, empresa_nome')
+          .eq('id', u.id)
+          .maybeSingle();
 
-  try {
-    const res = await fetch(getApiUrl('/api/auth/me'), { headers });
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        authenticated: Boolean(data.authenticated),
-        user: {
-          id: data.user.id,
-          email: data.user.email,
-          nome: data.user.nome,
-          plano: (data.user.plano as TipoPlano) || 'GRATUITO',
-        },
-        quota: {
-          plano: (data.quota.plano as TipoPlano) || 'GRATUITO',
-          used: data.quota.used || 0,
-          limit: data.quota.limit || 10,
-          allowed: data.quota.allowed ?? false,
-        },
-      };
+        const rawPlano = String(profile?.plano || 'GRATUITO').toUpperCase();
+        const plano: TipoPlano = rawPlano === 'TURBO' ? 'TURBO' : rawPlano === 'PRO' ? 'PRO' : 'GRATUITO';
+        const mesAtual = new Date().toISOString().slice(0, 7);
+        // REGRA DE NEGÓCIO: IA exclusiva do TURBO (GRATUITO: 0, PRO: 0, TURBO: 1500)
+        const limit = plano === 'TURBO' ? 1500 : 0;
+
+        let used = 0;
+        try {
+          const { count } = await client
+            .from('ai_usage')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', u.id)
+            .eq('mes_referencia', mesAtual);
+
+          if (typeof count === 'number') {
+            used = count;
+          }
+        } catch {
+          // ignore
+        }
+
+        return {
+          authenticated: true,
+          user: {
+            id: u.id,
+            email: u.email || '',
+            nome: profile?.nome || u.user_metadata?.nome || '',
+            plano,
+            empresaNome: profile?.empresa_nome,
+          },
+          quota: {
+            plano,
+            used,
+            limit,
+            allowed: limit > 0 && used < limit,
+            month: mesAtual,
+          },
+        };
+      }
+    } catch (err) {
+      console.warn('Erro ao consultar perfil no Supabase:', err);
     }
-  } catch (err) {
-    console.warn('Erro ao consultar /api/auth/me:', err);
   }
 
   return {
@@ -96,10 +120,42 @@ export async function fetchServerUserProfileAndQuota(): Promise<{
     quota: {
       plano: 'GRATUITO',
       used: 0,
-      limit: 10,
+      limit: 0,
       allowed: false,
     },
   };
+}
+
+// Invocador seguro de Edge Functions do Supabase com repasse automático de JWT
+export async function invokeEdgeFunction<T = any>(
+  functionName: string,
+  body?: any,
+  options?: { method?: 'GET' | 'POST' }
+): Promise<{ data: T | null; error: any }> {
+  if (!client) {
+    return { data: null, error: new Error('Supabase client não configurado no app.') };
+  }
+
+  try {
+    const token = await getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await client.functions.invoke(functionName, {
+      body,
+      headers,
+      method: options?.method || (body ? 'POST' : 'GET'),
+    });
+
+    if (res.error) {
+      return { data: null, error: res.error };
+    }
+    return { data: res.data as T, error: null };
+  } catch (err: any) {
+    return { data: null, error: err };
+  }
 }
 
 export async function loginWithEmail(email: string, password: string): Promise<{ success: boolean; error?: string }> {

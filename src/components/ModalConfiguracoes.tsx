@@ -46,7 +46,6 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
   const [formData, setFormData] = useState<ConfiguracaoEmpresa>({ ...empresa });
   const [testingAi, setTestingAi] = useState<boolean>(false);
   const [testResult, setTestResult] = useState<GeminiStatusResult | null>(null);
-  const [showWhatsAppToken, setShowWhatsAppToken] = useState<boolean>(false);
   const { theme, setTheme, isDark } = useTheme();
 
   if (!isOpen) return null;
@@ -209,7 +208,7 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
               <div className="p-2.5 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-850 flex items-start gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-emerald-950 dark:text-emerald-200 leading-relaxed">
-                  <strong>Segurança Máxima:</strong> A chave da Gemini é protegida no servidor/Cloudflare Worker (<code>process.env.GEMINI_API_KEY</code>). O navegador jamais armazena ou manipula credenciais confidenciais.
+                  <strong>Segurança Máxima:</strong> A chave da Gemini é protegida no servidor/Supabase Edge Functions (<code>GEMINI_API_KEY</code>). O navegador jamais armazena ou manipula credenciais confidenciais.
                 </p>
               </div>
 
@@ -248,94 +247,28 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
           </div>
 
           {/* SEÇÃO INTEGRAÇÃO WHATSAPP API */}
-          <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-50/60 via-slate-50 to-teal-50/40 dark:from-slate-900 dark:via-slate-850 dark:to-emerald-950/20 border border-emerald-300/80 dark:border-emerald-500/30 shadow-xs dark:shadow-[0_0_15px_rgba(16,185,129,0.08)] space-y-3">
+          <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-50/60 via-slate-50 to-teal-50/40 dark:from-slate-900 dark:via-slate-850 dark:to-emerald-950/20 border border-emerald-300/80 dark:border-emerald-500/30 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-500/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-xs">
                   <MessageSquare className="w-3.5 h-3.5" />
                 </div>
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-emerald-300">
-                  Integração WhatsApp API
+                  Envio WhatsApp com Fallback Universal
                 </span>
               </div>
               <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
-                Meta Cloud API v19.0
+                100% Compatível
               </span>
             </div>
 
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              Insira suas credenciais da <strong>Meta for Developers</strong> para habilitar o envio direto de mensagens e orçamentos via WhatsApp Cloud API oficial para seus clientes.
+              O FechaZap gera links diretos e prontos de WhatsApp (<code>wa.me</code>) para todos os orçamentos e mensagens, funcionando em qualquer celular ou computador sem você precisar configurar tokens ou contas complexas da Meta.
             </p>
 
-            <div className="space-y-3 pt-1">
-              {/* Token de Acesso (Meta) */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                  <span>Token de Acesso (Meta)</span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
-                    System User ou Token de Desenvolvedor
-                  </span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={showWhatsAppToken ? 'text' : 'password'}
-                    placeholder="EAAGm0PX4ZC0BA..."
-                    value={formData.whatsappToken || ''}
-                    onChange={(e) => handleChange('whatsappToken', e.target.value)}
-                    className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 dark:border-emerald-500/20 rounded-lg pl-3 pr-10 py-2 text-xs text-slate-800 dark:text-emerald-300 font-mono placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400 transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowWhatsAppToken(!showWhatsAppToken)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-emerald-400 transition-colors"
-                    title={showWhatsAppToken ? 'Ocultar token' : 'Exibir token'}
-                  >
-                    {showWhatsAppToken ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                  Chave bearer token obtida no painel da Meta Cloud API (WhatsApp &gt; Início rápido ou Usuários do Sistema).
-                </p>
-              </div>
-
-              {/* ID do Número de Telefone */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                  <span>ID do Número de Telefone</span>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
-                    Phone Number ID
-                  </span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: 104829104859102"
-                  value={formData.whatsappPhoneId || ''}
-                  onChange={(e) => handleChange('whatsappPhoneId', e.target.value)}
-                  className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 dark:border-emerald-500/20 rounded-lg px-3 py-2 text-xs text-slate-800 dark:text-emerald-300 font-mono placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400 transition-all"
-                />
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                  Identificador numérico exclusivo do número de telefone configurado na Meta.
-                </p>
-              </div>
-
-              {/* Status Indicator */}
-              <div className="pt-1">
-                {formData.whatsappToken && formData.whatsappPhoneId ? (
-                  <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-2 text-[11px] text-emerald-800 dark:text-emerald-300">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span>Credenciais da API Meta configuradas para disparo direto pelo PWA.</span>
-                  </div>
-                ) : (
-                  <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400">
-                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                    <span>Campos opcionais. Se vazios, o envio utilizará o link tradicional do WhatsApp Web (wa.me).</span>
-                  </div>
-                )}
-              </div>
+            <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Para clientes do plano <strong>TURBO</strong>, o follow-up automático pelo WhatsApp é gerenciado com segurança diretamente pela infraestrutura de servidor.</span>
             </div>
           </div>
 
@@ -511,7 +444,7 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
               </div>
               <div className="p-2.5 rounded-lg bg-white dark:bg-slate-850 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex justify-between items-center">
                 <span className="text-slate-500 dark:text-slate-400">Arquitetura:</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">Cloudflare Worker + Supabase</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">Supabase Edge Functions + PostgreSQL</span>
               </div>
             </div>
 

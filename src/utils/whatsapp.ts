@@ -1,7 +1,6 @@
 import { Orcamento, ConfiguracaoEmpresa } from '../types';
 import { formatCurrency, formatDate, cleanPhone } from './format';
-import { getAuthToken } from './supabase';
-import { getApiUrl } from './apiConfig';
+import { invokeEdgeFunction } from './supabase';
 
 export function generateWhatsAppQuoteText(orcamento: Orcamento, empresa: ConfiguracaoEmpresa): string {
   const itemsText = orcamento.itens
@@ -20,7 +19,7 @@ export function generateWhatsAppQuoteText(orcamento: Orcamento, empresa: Configu
 
   let pixInfo = '';
   if (empresa.chavePix) {
-    pixInfo = `\n⚡ *Chave PIX (${empresa.tipoChavePix.toUpperCase()}):* \`${empresa.chavePix}\``;
+    pixInfo = `\n⚡ *Chave PIX (${(empresa.tipoChavePix || 'pix').toUpperCase()}):* \`${empresa.chavePix}\``;
   }
 
   return `📄 *ORÇAMENTO #${orcamento.numero}*
@@ -56,123 +55,43 @@ export function openWhatsAppMessage(phone: string, text: string): void {
   window.open(url, '_blank');
 }
 
-// Disparo direto via Meta WhatsApp Cloud API utilizando as credenciais da empresa do cliente
-export async function sendWhatsAppViaApi(
-  to: string,
-  text: string,
-  empresa: ConfiguracaoEmpresa,
-  orcamentoId?: string
-): Promise<{ success: boolean; provider: string; messageId?: string; error?: string; fallbackUrl?: string }> {
-  const phone = cleanPhone(to);
-  const fallbackUrl = generateWhatsAppUrl(phone, text);
+// Disparo Automatizado de Follow-up via WhatsApp (Plano TURBO)
+// Executado exclusivamente pela Edge Function whatsapp-followup com credenciais únicas do servidor
+// Se o segredo não estiver configurado ou falhar, retorna fallbackUrl (wa.me) universal
+export async function dispararFollowUpTurbo(
+  orcamentoId: string,
+  to?: string
+): Promise<{
+  success: boolean;
+  provider: string;
+  messageId?: string;
+  text?: string;
+  fallbackUrl?: string;
+  notice?: string;
+  error?: string;
+}> {
+  const { data, error } = await invokeEdgeFunction<any>('whatsapp-followup', {
+    orcamentoId,
+    to,
+  });
 
-  // Validação amigável das credenciais da empresa (sem import.meta.env)
-  const token = empresa?.whatsappToken?.trim();
-  const phoneId = empresa?.whatsappPhoneId?.trim();
-
-  if (!token || !phoneId) {
+  if (error || !data) {
+    const errorMsg = error?.message || 'Falha ao conectar com o serviço de follow-up.';
     return {
       success: false,
-      provider: 'meta_cloud_api',
-      error: 'Credenciais da API do WhatsApp não configuradas. Acesse as Configurações da Empresa e preencha o Token de Acesso e o ID do Número de Telefone da Meta.',
-      fallbackUrl,
+      provider: 'error',
+      error: errorMsg,
+      fallbackUrl: to ? generateWhatsAppUrl(to, 'Olá! Gostaria de saber se você avaliou nosso orçamento.') : undefined,
     };
   }
 
-  try {
-    let formattedPhone = phone;
-    if (!formattedPhone.startsWith('55') && formattedPhone.length >= 10 && formattedPhone.length <= 11) {
-      formattedPhone = `55${formattedPhone}`;
-    }
-
-    const url = `https://graph.facebook.com/v19.0/${phoneId}/messages`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: formattedPhone,
-        type: 'text',
-        text: {
-          preview_url: false,
-          body: text,
-        },
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      const errorMessage = data?.error?.message || `Erro HTTP ${res.status} ao conectar à Meta API`;
-      return {
-        success: false,
-        provider: 'meta_cloud_api',
-        error: `Meta API: ${errorMessage}`,
-        fallbackUrl,
-      };
-    }
-
-    return {
-      success: true,
-      provider: 'meta_cloud_api',
-      messageId: data?.messages?.[0]?.id,
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      provider: 'meta_cloud_api',
-      error: err?.message || 'Falha de conexão com a API da Meta',
-      fallbackUrl,
-    };
-  }
+  return {
+    success: Boolean(data.success),
+    provider: data.provider || 'wa_me_fallback',
+    messageId: data.messageId,
+    text: data.text,
+    fallbackUrl: data.fallbackUrl,
+    notice: data.notice,
+    error: data.error,
+  };
 }
-
-// Disparo seguro autenticado através do Worker/Backend (Planos PRO e TURBO)
-export async function sendWhatsAppViaBackend(
-  to: string,
-  text: string,
-  orcamentoId?: string
-): Promise<{ success: boolean; provider: string; messageId?: string; error?: string; fallbackUrl?: string }> {
-  const phone = cleanPhone(to);
-  const fallbackUrl = generateWhatsAppUrl(phone, text);
-
-  try {
-    const token = await getAuthToken();
-    if (!token) {
-      return {
-        success: false,
-        provider: 'unauthorized',
-        error: 'É necessário estar autenticado para utilizar o envio automatizado pelo servidor.',
-        fallbackUrl,
-      };
-    }
-
-    const res = await fetch(getApiUrl('/api/whatsapp/send'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        to,
-        message: text,
-        orcamentoId,
-      }),
-    });
-
-    return await res.json();
-  } catch (err: any) {
-    return {
-      success: false,
-      provider: 'network_error',
-      error: err?.message || 'Falha de comunicação com o servidor',
-      fallbackUrl,
-    };
-  }
-}
-
-export const sendWhatsAppMeta = sendWhatsAppViaApi;

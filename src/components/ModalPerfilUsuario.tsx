@@ -157,25 +157,33 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                 </span>
               </div>
               <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
-                {used} / {limit} gerações
+                {currentPlano === 'TURBO' ? `${used} / ${limit} gerações` : '0 gerações (Exclusivo TURBO)'}
               </span>
             </div>
 
-            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all duration-500 ${
-                  pct >= 90 ? 'bg-rose-500' : pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
-                }`}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
+            {currentPlano === 'TURBO' ? (
+              <>
+                <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      pct >= 90 ? 'bg-rose-500' : pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
 
-            <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-              <span>Renovação automática mensal no banco</span>
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                {Math.max(0, limit - used)} restantes
-              </span>
-            </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                  <span>Renovação automática mensal no banco</span>
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    {Math.max(0, limit - used)} restantes
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Os planos <strong>GRATUITO</strong> e <strong>PRO</strong> não consomem IA no servidor. Faça upgrade para o <strong>TURBO</strong> para liberar 1.500 gerações mensais e automações comerciais.
+              </p>
+            )}
           </div>
 
           {/* Autenticação Supabase */}
@@ -344,7 +352,11 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                   <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5 mt-3">
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span><strong>250 IA</strong> / mês</span>
+                      <span><strong>Orçamentos Ilimitados</strong></span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                      <span>0 créditos de IA (gestão manual)</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
@@ -352,7 +364,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Processamento de Alta Velocidade</span>
+                      <span>Multi-dispositivos</span>
                     </li>
                   </ul>
                 </div>
@@ -375,15 +387,19 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                   <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5 mt-3">
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span><strong>1500 IA</strong> / mês</span>
+                      <span><strong>1.500 IA</strong> / mês (Gemini)</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Automação Total de WhatsApp</span>
+                      <span>Follow-up Automático WhatsApp</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Multi-dispositivos</span>
+                      <span>Análise Inteligente de Preços</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                      <span>Criação de Propostas por Voz</span>
                     </li>
                   </ul>
                 </div>

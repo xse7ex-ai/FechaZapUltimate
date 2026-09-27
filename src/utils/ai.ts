@@ -1,41 +1,37 @@
-import { Orcamento, ConfiguracaoEmpresa } from '../types';
-import { getAuthToken } from './supabase';
-import { getApiUrl } from './apiConfig';
+import { Orcamento, ConfiguracaoEmpresa, ItemOrcamento } from '../types';
+import { invokeEdgeFunction } from './supabase';
 
 export interface GeminiStatusResult {
   configured: boolean;
   model: string;
   status?: string;
-  sample?: string;
   error?: string;
   provider?: string;
   runtime?: string;
-  contingency?: boolean;
 }
 
 export function parseAiError(errData: any): string {
   if (!errData) return 'Erro ao comunicar com o serviço de IA.';
   if (typeof errData === 'string') {
-    if (errData.includes('Serviço de quota temporariamente indisponível') || errData.includes('quota temporariamente indisponível')) {
+    if (errData.includes('PLAN_TURBO_REQUIRED') || errData.includes('exclusiva para assinantes do plano TURBO')) {
+      return 'A Inteligência Artificial é exclusiva para assinantes do plano TURBO. Faça upgrade para desbloquear.';
+    }
+    if (errData.includes('Serviço de quota temporariamente indisponível')) {
       return 'Serviço de quota temporariamente indisponível. Tente novamente em instantes.';
     }
     if (errData.includes('503') || errData.includes('high demand') || errData.includes('UNAVAILABLE')) {
-      return 'Os servidores do Google Gemini estão com alta demanda temporária. O FechaZap ativou o modo de contingência.';
+      return 'Os servidores do Google Gemini estão com alta demanda temporária. Tente novamente em instantes.';
     }
-    if (errData.includes('401') || errData.includes('Não autorizado')) {
-      return 'Acesso não autorizado. É necessário fazer login para utilizar a inteligência artificial.';
+    if (errData.includes('401') || errData.includes('Não autorizado') || errData.includes('JWT ausente')) {
+      return 'Acesso não autorizado. É necessário fazer login com sua conta para utilizar a IA.';
     }
     if (errData.includes('429') || errData.includes('Limite mensal')) {
-      return errData;
+      return 'Limite mensal de IA atingido para o plano TURBO (1500 gerações).';
     }
     try {
       const parsed = JSON.parse(errData);
-      if (parsed.error?.message) {
-        return parsed.error.message;
-      }
-      if (parsed.error && typeof parsed.error === 'string') {
-        return parsed.error;
-      }
+      if (parsed.error?.message) return parsed.error.message;
+      if (parsed.error && typeof parsed.error === 'string') return parsed.error;
     } catch {
       // not json
     }
@@ -46,206 +42,145 @@ export function parseAiError(errData: any): string {
   return 'Erro ao processar com a IA.';
 }
 
-async function buildAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  const token = await getAuthToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-}
-
-// Consulta de status segura (sem expor secrets ou chaves de API)
+// Checagem de status da Edge Function de IA
 export async function checkGeminiStatus(): Promise<GeminiStatusResult> {
   try {
-    const res = await fetch(getApiUrl('/api/ai/status'));
-    if (!res.ok) {
+    const { data, error } = await invokeEdgeFunction<any>('fecha-ia', undefined, { method: 'GET' });
+    if (error || !data) {
       return {
         configured: false,
         model: 'gemini-3.8-flash',
-        error: `HTTP ${res.status}: Servidor de IA indisponível`,
+        error: error?.message || 'Edge Function fecha-ia indisponível',
       };
     }
-    const data = await res.json();
     return {
       configured: Boolean(data.configured && data.ok),
-      model: 'gemini-3.8-flash',
-      provider: data.provider || 'Google Gemini',
+      model: data.model || 'gemini-3.8-flash',
+      provider: 'Google Gemini',
+      runtime: data.runtime || 'Supabase Edge Functions',
       status: data.configured ? 'active' : 'unconfigured',
     };
   } catch (err: any) {
     return {
       configured: false,
       model: 'gemini-3.8-flash',
-      error: err?.message || 'Servidor/Worker indisponível',
+      error: err?.message || 'Servidor indisponível',
     };
   }
 }
 
-// Teste de conexão seguro: utiliza o endpoint /api/ai/status sem expor rotas vulneráveis
 export async function testarConexaoGemini(): Promise<GeminiStatusResult> {
   return await checkGeminiStatus();
 }
 
+// 1. Gerar Proposta / Copy de Fechamento Persuasiva com IA (Exclusivo TURBO)
 export async function gerarFechamentoGemini(
   orcamento: Orcamento,
   gatilho: string,
   tom: string,
   empresa: ConfiguracaoEmpresa
 ): Promise<string> {
-  const headers = await buildAuthHeaders();
-
-  const res = await fetch(getApiUrl('/api/ai/fechar-orcamento'), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      orcamentoId: orcamento.id,
-      orcamento,
-      gatilho,
-      tom,
-      empresa,
-    }),
+  const { data, error } = await invokeEdgeFunction<any>('fecha-ia', {
+    action: 'gerar_fechamento',
+    orcamentoId: orcamento.id,
+    orcamento,
+    gatilho,
+    tom,
+    empresa,
   });
 
-  const data = await res.json().catch(() => ({}));
-  if (res.status === 401) {
-    throw new Error('Acesso não autorizado. Faça login com sua conta para utilizar o FechaZap IA.');
-  }
-  if (res.status === 429) {
-    throw new Error(data.error || 'Limite mensal de IA atingido para o seu plano. Faça upgrade para continuar.');
-  }
-  if (!res.ok || !data.success) {
-    throw new Error(parseAiError(data.error || 'Falha ao gerar proposta com a IA.'));
+  if (error || !data?.success) {
+    throw new Error(parseAiError(data?.error || error?.message || 'Falha ao gerar proposta com IA.'));
   }
 
   return data.text;
 }
 
-export async function contornarObjecaoGemini(
-  orcamento: Orcamento,
-  objecao: string,
-  contexto: string,
-  empresa: ConfiguracaoEmpresa
-): Promise<string> {
-  const headers = await buildAuthHeaders();
-
-  const res = await fetch(getApiUrl('/api/ai/contornar-objecao'), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      orcamentoId: orcamento.id,
-      orcamento,
-      objecao,
-      contexto,
-      empresa,
-    }),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (res.status === 401) {
-    throw new Error('Acesso não autorizado. Faça login com sua conta para utilizar a IA.');
-  }
-  if (res.status === 429) {
-    throw new Error(data.error || 'Limite mensal de IA atingido para o seu plano.');
-  }
-  if (!res.ok || !data.success) {
-    throw new Error(parseAiError(data.error || 'Falha ao contornar objeção com a IA.'));
-  }
-
-  return data.text;
-}
-
+// 2. Gerar Mensagem de Follow-up com IA (Exclusivo TURBO)
 export async function gerarFollowUpGemini(
   orcamento: Orcamento,
   dias: number,
   empresa: ConfiguracaoEmpresa
 ): Promise<string> {
-  const headers = await buildAuthHeaders();
-
-  const res = await fetch(getApiUrl('/api/ai/follow-up'), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      orcamentoId: orcamento.id,
-      orcamento,
-      dias,
-      empresa,
-    }),
+  const { data, error } = await invokeEdgeFunction<any>('fecha-ia', {
+    action: 'follow_up',
+    orcamentoId: orcamento.id,
+    orcamento,
+    dias,
+    empresa,
   });
 
-  const data = await res.json().catch(() => ({}));
-  if (res.status === 401) {
-    throw new Error('Acesso não autorizado. Faça login para utilizar a IA.');
-  }
-  if (res.status === 429) {
-    throw new Error(data.error || 'Limite mensal de IA atingido para o seu plano.');
-  }
-  if (!res.ok || !data.success) {
-    throw new Error(parseAiError(data.error || 'Falha ao gerar follow-up com a IA.'));
+  if (error || !data?.success) {
+    throw new Error(parseAiError(data?.error || error?.message || 'Falha ao gerar follow-up com IA.'));
   }
 
   return data.text;
 }
 
-export async function chatComGemini(
-  message: string,
-  context: any,
-  history: Array<{ role: 'user' | 'model'; text: string }>
-): Promise<string> {
-  const headers = await buildAuthHeaders();
-
-  const res = await fetch(getApiUrl('/api/ai/chat'), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      message,
-      context,
-      history,
-    }),
+// 3. Gerar Orçamento Completo a partir de Texto ou Áudio (Exclusivo TURBO)
+export async function gerarOrcamentoComIA(
+  textoOuVoz: string,
+  empresa?: ConfiguracaoEmpresa
+): Promise<{
+  clienteNome?: string;
+  clienteTelefone?: string;
+  itens: ItemOrcamento[];
+  subtotal: number;
+  valorTotal: number;
+  prazoEntrega?: string;
+  formaPagamento?: string;
+  observacoes?: string;
+}> {
+  const { data, error } = await invokeEdgeFunction<any>('fecha-ia', {
+    action: 'gerar_orcamento',
+    texto: textoOuVoz,
+    empresa,
   });
 
-  const data = await res.json().catch(() => ({}));
-  if (res.status === 401) {
-    throw new Error('Acesso não autorizado. Faça login para utilizar o chat com a IA.');
-  }
-  if (res.status === 429) {
-    throw new Error(data.error || 'Limite mensal de IA atingido para o seu plano.');
-  }
-  if (!res.ok || !data.success) {
-    throw new Error(parseAiError(data.error || 'Falha na comunicação com a IA.'));
+  if (error || !data?.success) {
+    throw new Error(parseAiError(data?.error || error?.message || 'Falha ao gerar orçamento com IA.'));
   }
 
-  return data.text;
+  const d = data.data || {};
+  const itensFormatados: ItemOrcamento[] = Array.isArray(d.itens)
+    ? d.itens.map((it: any, idx: number) => ({
+        id: String(Date.now() + idx),
+        descricao: String(it.descricao || 'Item'),
+        quantidade: Number(it.quantidade) || 1,
+        valorUnitario: Number(it.valorUnitario) || 0,
+        total: (Number(it.quantidade) || 1) * (Number(it.valorUnitario) || 0),
+      }))
+    : [{ id: '1', descricao: textoOuVoz.slice(0, 80), quantidade: 1, valorUnitario: 100, total: 100 }];
+
+  const subtotal = itensFormatados.reduce((acc, it) => acc + it.total, 0);
+
+  return {
+    clienteNome: d.clienteNome || '',
+    clienteTelefone: d.clienteTelefone || '',
+    itens: itensFormatados,
+    subtotal,
+    valorTotal: Number(d.valorTotal) || subtotal,
+    prazoEntrega: d.prazoEntrega || '3 a 5 dias úteis',
+    formaPagamento: d.formaPagamento || '50% entrada + 50% entrega',
+    observacoes: d.observacoes || '',
+  };
 }
 
-export async function diagnosticoVendasGemini(
-  relatorio?: any
-): Promise<{ text: string; dataSource?: string }> {
-  const headers = await buildAuthHeaders();
-
-  const res = await fetch(getApiUrl('/api/ai/diagnostico-vendas'), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      relatorio,
-    }),
+// 4. Analisar Preços com Base no Histórico do Próprio Usuário (Exclusivo TURBO)
+export async function analisarPrecosComIA(
+  itemOuServico: string
+): Promise<{ text: string; totalAmostras: number }> {
+  const { data, error } = await invokeEdgeFunction<any>('fecha-ia', {
+    action: 'analisar_precos',
+    servico: itemOuServico,
   });
 
-  const data = await res.json().catch(() => ({}));
-  if (res.status === 401) {
-    throw new Error('Acesso não autorizado. Faça login para acessar o diagnóstico de vendas.');
-  }
-  if (res.status === 429) {
-    throw new Error(data.error || 'Limite mensal de IA atingido para o seu plano.');
-  }
-  if (!res.ok || !data.success) {
-    throw new Error(parseAiError(data.error || 'Falha ao gerar diagnóstico de vendas.'));
+  if (error || !data?.success) {
+    throw new Error(parseAiError(data?.error || error?.message || 'Falha na análise de preços com IA.'));
   }
 
   return {
     text: data.text,
-    dataSource: data.dataSource,
+    totalAmostras: data.totalAmostras || 0,
   };
 }

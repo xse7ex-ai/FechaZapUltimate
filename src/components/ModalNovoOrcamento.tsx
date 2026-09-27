@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Calculator, UserCheck, Sparkles } from 'lucide-react';
-import { Orcamento, Cliente, ItemOrcamento } from '../types';
+import { X, Plus, Trash2, Calculator, UserCheck, Sparkles, Mic, MicOff, Crown } from 'lucide-react';
+import { Orcamento, Cliente, ItemOrcamento, TipoPlano } from '../types';
 import { formatCurrency } from '../utils/format';
+import { gerarOrcamentoComIA } from '../utils/ai';
 
 interface ModalNovoOrcamentoProps {
   isOpen: boolean;
@@ -10,6 +11,9 @@ interface ModalNovoOrcamentoProps {
   clientes: Cliente[];
   orcamentoToEdit?: Orcamento | null;
   nextNumero: string;
+  userPlano?: TipoPlano;
+  onShowToast?: (title: string, desc?: string, type?: 'success' | 'error' | 'info') => void;
+  onOpenPerfil?: () => void;
 }
 
 export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
@@ -19,9 +23,17 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
   clientes,
   orcamentoToEdit,
   nextNumero,
+  userPlano = 'GRATUITO',
+  onShowToast,
+  onOpenPerfil,
 }) => {
   const [clienteMode, setClienteMode] = useState<'existente' | 'novo'>('existente');
   const [selectedClienteId, setSelectedClienteId] = useState<string>('');
+  
+  // AI Voice/Text Generator State
+  const [aiPrompt, setAiPrompt] = useState<string>('');
+  const [loadingAi, setLoadingAi] = useState<boolean>(false);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
   
   // Novo cliente inline
   const [novoNome, setNovoNome] = useState<string>('');
@@ -176,6 +188,84 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
     onClose();
   };
 
+  const handleToggleVoice = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      onShowToast?.('Microfone', 'Reconhecimento de voz não suportado pelo navegador. Digite sua descrição no campo.', 'info');
+      return;
+    }
+
+    if (isRecording) {
+      setIsRecording(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'pt-BR';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+        onShowToast?.('Ouvindo...', 'Fale os serviços e valores para o orçamento.', 'info');
+      };
+
+      recognition.onresult = (event: any) => {
+        const speechResult = event.results[0][0].transcript;
+        setAiPrompt((prev) => (prev ? `${prev} ${speechResult}` : speechResult));
+      };
+
+      recognition.onerror = () => {
+        setIsRecording(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      recognition.start();
+    } catch {
+      setIsRecording(false);
+    }
+  };
+
+  const handleGerarOrcamentoIA = async () => {
+    if (userPlano !== 'TURBO') {
+      onShowToast?.('Recurso TURBO', 'A criação de orçamentos com IA é exclusiva para o plano TURBO.', 'error');
+      onOpenPerfil?.();
+      return;
+    }
+
+    if (!aiPrompt.trim()) {
+      onShowToast?.('Texto obrigatório', 'Descreva o serviço para a IA gerar os itens.', 'error');
+      return;
+    }
+
+    setLoadingAi(true);
+    try {
+      const res = await gerarOrcamentoComIA(aiPrompt);
+      if (res.itens && res.itens.length > 0) {
+        setItens(res.itens);
+      }
+      if (res.prazoEntrega) setPrazoEntrega(res.prazoEntrega);
+      if (res.formaPagamento) setFormaPagamento(res.formaPagamento);
+      if (res.observacoes) setObservacoes(res.observacoes);
+
+      if (res.clienteNome && clienteMode === 'novo') {
+        setNovoNome(res.clienteNome);
+        if (res.clienteTelefone) setNovoTelefone(res.clienteTelefone);
+      }
+
+      onShowToast?.('Orçamento Criado com IA!', 'Itens e valores extraídos com sucesso.', 'success');
+      setAiPrompt('');
+    } catch (err: any) {
+      onShowToast?.('Aviso de IA', err?.message || 'Falha ao processar orçamento.', 'error');
+    } finally {
+      setLoadingAi(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-slate-800 dark:text-slate-100">
@@ -187,7 +277,7 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
               {orcamentoToEdit ? `Editar Orçamento #${orcamentoToEdit.numero}` : `Novo Orçamento #${nextNumero}`}
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Preencha os itens e gere a proposta para WhatsApp com suporte da IA Gemini.
+              Preencha os itens ou utilize o assistente de voz/texto com IA Gemini (TURBO).
             </p>
           </div>
           <button
@@ -200,6 +290,58 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          
+          {/* ASSISTENTE IA PARA CRIAR ORÇAMENTO (TEXTO OU VOZ) */}
+          <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50/80 via-teal-50/60 to-emerald-50/40 dark:from-emerald-950/30 dark:via-slate-850 dark:to-slate-850 border border-emerald-200 dark:border-emerald-800/60 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-950 dark:text-emerald-300">
+                  Preenchimento Automático por IA (Texto ou Áudio)
+                </span>
+              </div>
+              <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                userPlano === 'TURBO'
+                  ? 'bg-amber-400 text-slate-950 border border-amber-300'
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+              }`}>
+                {userPlano === 'TURBO' ? 'TURBO Ativo' : 'Exclusivo TURBO'}
+              </span>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="Ex: Reforma de piso 15m2 a 75 reais, troca de pia 250, cliente Carlos..."
+                className="flex-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+
+              <button
+                type="button"
+                onClick={handleToggleVoice}
+                title={isRecording ? 'Parar gravação' : 'Gravar por voz'}
+                className={`p-2 rounded-lg border transition-colors cursor-pointer ${
+                  isRecording
+                    ? 'bg-rose-600 text-white border-rose-600 animate-pulse'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}
+              >
+                {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleGerarOrcamentoIA}
+                disabled={loadingAi}
+                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{loadingAi ? 'Criando...' : 'Gerar com IA'}</span>
+              </button>
+            </div>
+          </div>
           
           {/* CLIENTE SECTION */}
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3">

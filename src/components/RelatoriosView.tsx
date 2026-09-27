@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   BarChart3,
   TrendingUp,
   DollarSign,
   PieChart,
-  Sparkles,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -12,7 +11,6 @@ import {
 } from 'lucide-react';
 import { Orcamento, ConfiguracaoEmpresa } from '../types';
 import { formatCurrency } from '../utils/format';
-import { diagnosticoVendasGemini } from '../utils/ai';
 
 interface RelatoriosViewProps {
   orcamentos: Orcamento[];
@@ -25,9 +23,6 @@ export const RelatoriosView: React.FC<RelatoriosViewProps> = ({
   empresa,
   onShowToast,
 }) => {
-  const [loadingAi, setLoadingAi] = useState<boolean>(false);
-  const [diagnostico, setDiagnostico] = useState<string>('');
-
   const total = orcamentos.length;
   const aprovados = orcamentos.filter((o) => o.status === 'aprovado');
   const pendentes = orcamentos.filter((o) => o.status === 'pendente' || o.status === 'enviado');
@@ -41,34 +36,6 @@ export const RelatoriosView: React.FC<RelatoriosViewProps> = ({
   const taxaConversao = total > 0 ? Math.round((aprovados.length / total) * 100) : 0;
   const ticketMedio = aprovados.length > 0 ? faturamentoAprovado / aprovados.length : 0;
 
-  const handleGerarDiagnostico = async () => {
-    setLoadingAi(true);
-    try {
-      const relatorioData = {
-        totalOrcamentos: total,
-        aprovados: aprovados.length,
-        pendentes: pendentes.length,
-        recusados: recusados.length,
-        faturamentoAprovado: faturamentoAprovado.toFixed(2),
-        ticketMedio: ticketMedio.toFixed(2),
-        taxaConversao,
-      };
-
-      const res = await diagnosticoVendasGemini(relatorioData);
-      setDiagnostico(res.text);
-      if (res.dataSource === 'supabase_real') {
-        onShowToast('Diagnóstico com Supabase!', 'Análise fundamentada nos orçamentos reais do banco.', 'success');
-      } else {
-        onShowToast('Diagnóstico Gerado com Gemini!', 'Análise de vendas concluída com sucesso.', 'success');
-      }
-    } catch (err: any) {
-      console.error(err);
-      onShowToast('Falha no diagnóstico', err?.message, 'error');
-    } finally {
-      setLoadingAi(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -81,29 +48,7 @@ export const RelatoriosView: React.FC<RelatoriosViewProps> = ({
             Acompanhe o retorno financeiro dos seus orçamentos e identifique oportunidades de melhoria.
           </p>
         </div>
-
-        <button
-          onClick={handleGerarDiagnostico}
-          disabled={loadingAi}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-600/30 disabled:opacity-60 transition-all active:scale-95"
-        >
-          <Sparkles className={`w-4 h-4 ${loadingAi ? 'animate-spin' : ''}`} />
-          <span>{loadingAi ? 'Analisando com Gemini 3.8...' : 'Gerar Diagnóstico com IA'}</span>
-        </button>
       </div>
-
-      {/* Diagnóstico Gemini Box (if generated) */}
-      {diagnostico && (
-        <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-950 text-white shadow-xl border border-emerald-500/40 animate-in fade-in slide-in-from-top-3 duration-300">
-          <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider mb-2">
-            <Sparkles className="w-4 h-4" />
-            <span>Diagnóstico Comercial Gerado por Google Gemini 3.8 Flash</span>
-          </div>
-          <div className="text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-line font-normal">
-            {diagnostico}
-          </div>
-        </div>
-      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -226,6 +226,27 @@ export default function App() {
 
   // Save quote handler
   const handleSaveOrcamento = (savedOrcamento: Orcamento, newCliente?: Cliente) => {
+    const isEditing = orcamentos.some((o) => o.id === savedOrcamento.id);
+    const mesAtual = new Date().toISOString().slice(0, 7);
+    const orcamentosMes = orcamentos.filter(
+      (o) => o.dataCriacao && o.dataCriacao.startsWith(mesAtual)
+    );
+
+    // REGRA DE NEGÓCIO: GRATUITO possui limite estrito de 5 orçamentos/mês
+    if (!isEditing && userPlano === 'GRATUITO' && orcamentosMes.length >= 5) {
+      addToast(
+        'Limite de Orçamentos Atingido',
+        'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados.',
+        'error',
+        {
+          label: 'Ver Planos',
+          onClick: () => setIsPerfilOpen(true),
+        }
+      );
+      setIsPerfilOpen(true);
+      return;
+    }
+
     if (newCliente) {
       setClientes((prev) => [newCliente, ...prev]);
     }
@@ -442,6 +463,9 @@ export default function App() {
         clientes={clientes}
         orcamentoToEdit={orcamentoToEdit}
         nextNumero={nextNumero}
+        userPlano={userPlano}
+        onShowToast={addToast}
+        onOpenPerfil={() => setIsPerfilOpen(true)}
       />
 
       <ModalDetalhes
@@ -461,6 +485,8 @@ export default function App() {
         selectedOrcamentoId={selectedOrcamentoIdForIA}
         empresa={empresa}
         onShowToast={addToast}
+        userPlano={userPlano}
+        onOpenPerfil={() => setIsPerfilOpen(true)}
       />
 
       <ModalConfiguracoes

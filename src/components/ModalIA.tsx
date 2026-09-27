@@ -6,26 +6,21 @@ import {
   Copy,
   Check,
   Flame,
-  Zap,
   Clock,
-  ShieldCheck,
-  Award,
-  MessageSquare,
-  AlertTriangle,
-  RotateCcw,
-  Bot,
-  User,
   ArrowRight,
+  TrendingUp,
+  Crown,
+  Lock,
+  ExternalLink,
 } from 'lucide-react';
-import { Orcamento, ConfiguracaoEmpresa, GatilhoIA } from '../types';
+import { Orcamento, ConfiguracaoEmpresa, TipoPlano } from '../types';
 import { GATILHOS_IA } from '../data/initialData';
 import {
   gerarFechamentoGemini,
-  contornarObjecaoGemini,
   gerarFollowUpGemini,
-  chatComGemini,
+  analisarPrecosComIA,
 } from '../utils/ai';
-import { openWhatsAppMessage } from '../utils/whatsapp';
+import { openWhatsAppMessage, dispararFollowUpTurbo } from '../utils/whatsapp';
 import { formatCurrency } from '../utils/format';
 
 interface ModalIAProps {
@@ -35,17 +30,11 @@ interface ModalIAProps {
   selectedOrcamentoId?: string;
   empresa: ConfiguracaoEmpresa;
   onShowToast: (title: string, desc?: string, type?: 'success' | 'error' | 'info') => void;
+  userPlano?: TipoPlano;
+  onOpenPerfil?: () => void;
 }
 
-type TabIA = 'gatilhos' | 'objecoes' | 'followup' | 'chat';
-
-const OBJECOES_COMUNS = [
-  'Achei o valor um pouco caro, consegue dar desconto?',
-  'Vou ver com meu sócio / minha esposa e te aviso.',
-  'Achei outro profissional que cobra metade do preço.',
-  'Gostei muito da proposta, mas só consigo fazer no mês que vem.',
-  'Estou sem orçamento disponível neste momento.',
-];
+type TabIA = 'gatilhos' | 'followup' | 'precificacao';
 
 export const ModalIA: React.FC<ModalIAProps> = ({
   isOpen,
@@ -54,6 +43,8 @@ export const ModalIA: React.FC<ModalIAProps> = ({
   selectedOrcamentoId,
   empresa,
   onShowToast,
+  userPlano = 'GRATUITO',
+  onOpenPerfil,
 }) => {
   const [currentOrcamentoId, setCurrentOrcamentoId] = useState<string>(
     selectedOrcamentoId || orcamentos[0]?.id || ''
@@ -64,21 +55,13 @@ export const ModalIA: React.FC<ModalIAProps> = ({
   const [selectedGatilho, setSelectedGatilho] = useState<string>(GATILHOS_IA[0].id);
   const [tomVoz, setTomVoz] = useState<string>('Profissional e caloroso');
 
-  // Objection State
-  const [selectedObjecao, setSelectedObjecao] = useState<string>(OBJECOES_COMUNS[0]);
-  const [customObjecao, setCustomObjecao] = useState<string>('');
-
   // Follow-up State
   const [diasFollowUp, setDiasFollowUp] = useState<number>(2);
+  const [followUpDispatching, setFollowUpDispatching] = useState<boolean>(false);
+  const [lastFallbackUrl, setLastFallbackUrl] = useState<string | null>(null);
 
-  // Chat State
-  const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'model'; text: string }>>([
-    {
-      role: 'model',
-      text: 'Olá! Sou o consultor de fechamento do FechaZap com Google Gemini. Como posso te ajudar a converter este orçamento em venda?',
-    },
-  ]);
-  const [inputChat, setInputChat] = useState<string>('');
+  // Pricing State
+  const [servicoAnalise, setServicoAnalise] = useState<string>('');
 
   // Output & Loading
   const [generatedText, setGeneratedText] = useState<string>('');
@@ -87,6 +70,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
 
   if (!isOpen) return null;
 
+  const isTurbo = userPlano === 'TURBO';
   const currentOrcamento = orcamentos.find((o) => o.id === currentOrcamentoId) || orcamentos[0];
 
   const handleGenerateFechamento = async () => {
@@ -96,6 +80,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
     }
 
     setLoading(true);
+    setLastFallbackUrl(null);
     try {
       const gatilhoObj = GATILHOS_IA.find((g) => g.id === selectedGatilho);
       const text = await gerarFechamentoGemini(
@@ -105,31 +90,10 @@ export const ModalIA: React.FC<ModalIAProps> = ({
         empresa
       );
       setGeneratedText(text);
-      onShowToast('Copy gerada pelo Gemini!', 'Mensagem pronta para WhatsApp.', 'success');
+      onShowToast('Copy gerada pelo Gemini!', 'Mensagem de alta conversão pronta.', 'success');
     } catch (err: any) {
       console.error(err);
-      onShowToast('Erro na API Gemini', err?.message || 'Verifique sua conexão.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleContornarObjecao = async () => {
-    if (!currentOrcamento) return;
-    setLoading(true);
-    try {
-      const objecaoFinal = customObjecao.trim() || selectedObjecao;
-      const text = await contornarObjecaoGemini(
-        currentOrcamento,
-        objecaoFinal,
-        'Negociação pelo WhatsApp',
-        empresa
-      );
-      setGeneratedText(text);
-      onShowToast('Solução de objeção gerada!', 'Respostas persuasivas com Gemini.', 'success');
-    } catch (err: any) {
-      console.error(err);
-      onShowToast('Erro na API Gemini', err?.message, 'error');
+      onShowToast('Aviso de IA', err?.message || 'Verifique sua conexão.', 'error');
     } finally {
       setLoading(false);
     }
@@ -138,6 +102,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
   const handleGenerateFollowUp = async () => {
     if (!currentOrcamento) return;
     setLoading(true);
+    setLastFallbackUrl(null);
     try {
       const text = await gerarFollowUpGemini(
         currentOrcamento,
@@ -145,58 +110,67 @@ export const ModalIA: React.FC<ModalIAProps> = ({
         empresa
       );
       setGeneratedText(text);
-      onShowToast('Follow-up criado com Gemini!', 'Mensagem amigável de acompanhamento.', 'success');
+      onShowToast('Follow-up criado com Gemini!', 'Mensagem de acompanhamento pronta.', 'success');
     } catch (err: any) {
       console.error(err);
-      onShowToast('Erro no follow-up', err?.message, 'error');
+      onShowToast('Aviso de IA', err?.message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSendChatMessage = async () => {
-    if (!inputChat.trim() || loading) return;
-    const userMsg = inputChat.trim();
-    setInputChat('');
-    const newHistory = [...chatMessages, { role: 'user' as const, text: userMsg }];
-    setChatMessages(newHistory);
-    setLoading(true);
-
+  const handleDispararWhatsAppAutomatico = async () => {
+    if (!currentOrcamento) return;
+    setFollowUpDispatching(true);
     try {
-      const reply = await chatComGemini(
-        userMsg,
-        currentOrcamento
-          ? {
-              cliente: currentOrcamento.clienteNome,
-              valorTotal: currentOrcamento.valorTotal,
-              itens: currentOrcamento.itens,
-              status: currentOrcamento.status,
-            }
-          : null,
-        newHistory
-      );
-      setChatMessages([...newHistory, { role: 'model', text: reply }]);
+      const res = await dispararFollowUpTurbo(currentOrcamento.id, currentOrcamento.clienteTelefone);
+      if (res.fallbackUrl) {
+        setLastFallbackUrl(res.fallbackUrl);
+      }
+      if (res.text) {
+        setGeneratedText(res.text);
+      }
+
+      if (res.provider === 'meta-cloud-api') {
+        onShowToast('WhatsApp Enviado!', 'Follow-up despachado via Meta Cloud API.', 'success');
+      } else {
+        onShowToast('Link Gerado!', 'Mensagem pronta no link direto do WhatsApp (wa.me).', 'info');
+        if (res.fallbackUrl) {
+          window.open(res.fallbackUrl, '_blank');
+        }
+      }
     } catch (err: any) {
-      setChatMessages([
-        ...newHistory,
-        {
-          role: 'model',
-          text: `⚠️ Desculpe, tive um problema ao conectar com a API Gemini: ${err?.message}`,
-        },
-      ]);
+      onShowToast('Erro no disparo', err?.message, 'error');
+    } finally {
+      setFollowUpDispatching(false);
+    }
+  };
+
+  const handleAnalisarPrecos = async () => {
+    setLoading(true);
+    setLastFallbackUrl(null);
+    try {
+      const itemNome = servicoAnalise.trim() || currentOrcamento?.itens?.[0]?.descricao || 'Serviço';
+      const res = await analisarPrecosComIA(itemNome);
+      setGeneratedText(res.text);
+      onShowToast('Análise de Preços Concluída!', `Baseada em ${res.totalAmostras} orçamentos seus.`, 'success');
+    } catch (err: any) {
+      console.error(err);
+      onShowToast('Aviso de IA', err?.message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCopyText = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopy = () => {
+    if (!generatedText) return;
+    navigator.clipboard.writeText(generatedText);
     setCopied(true);
     onShowToast('Copiado!', 'Mensagem copiada para a área de transferência.', 'success');
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSendToWhatsApp = (text: string) => {
+  const handleSendWhatsAppManual = (text: string) => {
     if (!currentOrcamento?.clienteTelefone) {
       onShowToast('Telefone ausente', 'O cliente não possui telefone cadastrado.', 'error');
       return;
@@ -217,13 +191,13 @@ export const ModalIA: React.FC<ModalIAProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-lg leading-tight">FechaZap IA</h3>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                  Google Gemini 3.8 Flash
+                <h3 className="font-bold text-lg leading-tight">FechaZap IA Copiloto</h3>
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 border border-amber-300">
+                  Exclusivo TURBO
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Google Gemini API • Fechamento persuasivo de alta conversão para WhatsApp
+                Google Gemini • Fechamento persuasivo, análise histórica e follow-up no WhatsApp
               </p>
             </div>
           </div>
@@ -235,374 +209,322 @@ export const ModalIA: React.FC<ModalIAProps> = ({
           </button>
         </div>
 
-        {/* Quote Context Selector */}
-        <div className="bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 flex-1 min-w-[240px]">
-            <span className="font-semibold text-slate-700 dark:text-slate-300">Orçamento Contexto:</span>
-            <select
-              value={currentOrcamentoId}
-              onChange={(e) => setCurrentOrcamentoId(e.target.value)}
-              className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 font-medium focus:ring-2 focus:ring-emerald-500 outline-none flex-1 max-w-sm"
-            >
-              {orcamentos.map((orc) => (
-                <option key={orc.id} value={orc.id} className="dark:bg-slate-800">
-                  #{orc.numero} - {orc.clienteNome} ({formatCurrency(orc.valorTotal)})
-                </option>
-              ))}
-            </select>
+        {/* Lock Screen if not TURBO */}
+        {!isTurbo ? (
+          <div className="p-8 sm:p-12 text-center space-y-6 max-w-lg mx-auto my-auto">
+            <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-sm">
+              <Crown className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-xl font-black text-slate-900 dark:text-white">
+                Recurso Exclusivo do Plano TURBO
+              </h4>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                Os planos <strong>Gratuito</strong> e <strong>PRO</strong> operam com foco em gestão manual sem consumo de IA no servidor.
+                O plano <strong>TURBO</strong> inclui 1.500 gerações de IA por mês, criação de propostas por voz/texto, análise histórica de preços e follow-up automático via WhatsApp.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-left space-y-2">
+              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                <span>O que o TURBO desbloqueia:</span>
+              </div>
+              <ul className="text-slate-600 dark:text-slate-400 space-y-1 pl-5 list-disc">
+                <li>1.500 requisições de Google Gemini por mês</li>
+                <li>Follow-up automatizado de clientes pelo WhatsApp</li>
+                <li>Análise de preços baseada no histórico real dos seus orçamentos</li>
+                <li>Criação ultrarrápida de orçamentos por comando de voz/áudio</li>
+              </ul>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenPerfil?.();
+                }}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Crown className="w-4 h-4 text-amber-300" />
+                <span>Fazer Upgrade para TURBO</span>
+              </button>
+              <button
+                onClick={onClose}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Voltar
+              </button>
+            </div>
           </div>
-
-          {currentOrcamento && (
-            <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400">
-              <span>
-                Status:{' '}
-                <strong className="capitalize text-emerald-700 dark:text-emerald-400">
-                  {currentOrcamento.status}
-                </strong>
-              </span>
-              <span>
-                WhatsApp:{' '}
-                <strong className="dark:text-slate-200">{currentOrcamento.clienteTelefone || 'Não informado'}</strong>
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 shrink-0 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('gatilhos')}
-            className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'gatilhos'
-                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-            }`}
-          >
-            <Flame className="w-4 h-4 text-amber-500" />
-            Gatilhos de Fechamento
-          </button>
-          <button
-            onClick={() => setActiveTab('objecoes')}
-            className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'objecoes'
-                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4 text-blue-500" />
-            Quebrar Objeções
-          </button>
-          <button
-            onClick={() => setActiveTab('followup')}
-            className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'followup'
-                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-            }`}
-          >
-            <Clock className="w-4 h-4 text-purple-500" />
-            Follow-up Amigável
-          </button>
-          <button
-            onClick={() => setActiveTab('chat')}
-            className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeTab === 'chat'
-                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-            }`}
-          >
-            <Bot className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            Chat com Gemini
-          </button>
-        </div>
-
-        {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/50 dark:bg-slate-900/60">
-          
-          {/* TAB 1: GATILHOS */}
-          {activeTab === 'gatilhos' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-                  Selecione o Gatilho Mental para Fechar a Venda:
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                  {GATILHOS_IA.map((g) => (
-                    <button
-                      key={g.id}
-                      onClick={() => setSelectedGatilho(g.id)}
-                      className={`text-left p-3 rounded-xl border text-xs transition-all cursor-pointer ${
-                        selectedGatilho === g.id
-                          ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 shadow-sm ring-1 ring-emerald-500'
-                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="font-bold text-slate-900 dark:text-white mb-1">{g.titulo}</div>
-                      <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">{g.descricao}</p>
-                    </button>
+        ) : (
+          <>
+            {/* Quote Context Selector */}
+            <div className="bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">Orçamento:</span>
+                <select
+                  value={currentOrcamentoId}
+                  onChange={(e) => setCurrentOrcamentoId(e.target.value)}
+                  className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 font-medium focus:ring-2 focus:ring-emerald-500 outline-none flex-1 max-w-sm"
+                >
+                  {orcamentos.map((orc) => (
+                    <option key={orc.id} value={orc.id} className="dark:bg-slate-800">
+                      #{orc.numero} - {orc.clienteNome} ({formatCurrency(orc.valorTotal)})
+                    </option>
                   ))}
-                </div>
+                </select>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 pt-2">
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Tom de Voz da Mensagem:
-                  </label>
-                  <select
-                    value={tomVoz}
-                    onChange={(e) => setTomVoz(e.target.value)}
-                    className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="Profissional e caloroso">Profissional, caloroso e seguro</option>
-                    <option value="Direto e objetivo">Direto ao ponto, focado em agilidade</option>
-                    <option value="Urgente e decidido">Urgência com elegância (vagas esgotando)</option>
-                    <option value="Amigável e consultivo">Amigo consultor, focado em ajudar</option>
-                  </select>
+              {currentOrcamento && (
+                <div className="flex items-center gap-3 text-slate-600 dark:text-slate-400">
+                  <span>
+                    Status:{' '}
+                    <strong className="capitalize text-emerald-700 dark:text-emerald-400">
+                      {currentOrcamento.status}
+                    </strong>
+                  </span>
+                  <span>
+                    WhatsApp:{' '}
+                    <strong className="dark:text-slate-200">{currentOrcamento.clienteTelefone || 'Não informado'}</strong>
+                  </span>
                 </div>
-
-                <div className="pt-5">
-                  <button
-                    onClick={handleGenerateFechamento}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-600/30 disabled:opacity-60 transition-all active:scale-95 cursor-pointer"
-                  >
-                    <Sparkles className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                    <span>{loading ? 'Gerando com Gemini 3.8...' : 'Gerar Mensagem de Fechamento'}</span>
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
-          )}
 
-          {/* TAB 2: OBJEÇÕES */}
-          {activeTab === 'objecoes' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-                  Qual objeção o cliente apresentou?
-                </label>
-                <div className="space-y-2">
-                  {OBJECOES_COMUNS.map((obj, i) => (
-                    <label
-                      key={i}
-                      className={`flex items-start gap-2.5 p-3 rounded-xl border text-xs cursor-pointer transition-all ${
-                        selectedObjecao === obj && !customObjecao
-                          ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 font-medium'
-                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="objecao"
-                        checked={selectedObjecao === obj && !customObjecao}
-                        onChange={() => {
-                          setSelectedObjecao(obj);
-                          setCustomObjecao('');
-                        }}
-                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span className="text-slate-800 dark:text-slate-200 leading-snug">{obj}</span>
+            {/* Tab Navigation */}
+            <div className="flex border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 shrink-0 overflow-x-auto">
+              <button
+                onClick={() => setActiveTab('gatilhos')}
+                className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                  activeTab === 'gatilhos'
+                    ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
+                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                }`}
+              >
+                <Flame className="w-4 h-4 text-amber-500" />
+                Gatilhos de Fechamento
+              </button>
+              <button
+                onClick={() => setActiveTab('followup')}
+                className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                  activeTab === 'followup'
+                    ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
+                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                }`}
+              >
+                <Clock className="w-4 h-4 text-purple-500" />
+                Follow-up WhatsApp
+              </button>
+              <button
+                onClick={() => setActiveTab('precificacao')}
+                className={`py-3 px-4 font-semibold text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                  activeTab === 'precificacao'
+                    ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
+                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4 text-blue-500" />
+                Análise de Preços
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/50 dark:bg-slate-900/60">
+              
+              {/* TAB 1: GATILHOS */}
+              {activeTab === 'gatilhos' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+                      Gatilho de Conversão:
                     </label>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Ou digite a mensagem exata que o cliente mandou:
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: 'O concorrente X me fez por R$ 500 a menos com as mesmas peças...'"
-                  value={customObjecao}
-                  onChange={(e) => setCustomObjecao(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-850 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-
-              <div className="pt-2">
-                <button
-                  onClick={handleContornarObjecao}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-600/30 disabled:opacity-60 transition-all active:scale-95 cursor-pointer"
-                >
-                  <Sparkles className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                  <span>{loading ? 'Consultando Gemini 3.8...' : 'Contornar Objeção com Gemini'}</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: FOLLOW-UP */}
-          {activeTab === 'followup' && (
-            <div className="space-y-4">
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                Mais de 60% das vendas no WhatsApp fecham no <strong>follow-up</strong>, e não no primeiro contato. O Gemini gera uma abordagem leve que não parece cobrança chata.
-              </p>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-                  Há quanto tempo o orçamento foi enviado?
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {[
-                    { dias: 1, label: '24 horas', desc: 'Lembrança rápida do início da semana' },
-                    { dias: 2, label: '2 a 3 dias', desc: 'Acompanhamento padrão suave' },
-                    { dias: 5, label: '5 dias', desc: 'Aviso sobre agenda e disponibilidade' },
-                    { dias: 10, label: '10+ dias', desc: 'Tentativa de reaquecer o contato' },
-                  ].map((item) => (
-                    <button
-                      key={item.dias}
-                      onClick={() => setDiasFollowUp(item.dias)}
-                      className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
-                        diasFollowUp === item.dias
-                          ? 'border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/40 shadow-sm ring-1 ring-emerald-500'
-                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="text-xs font-bold text-slate-900 dark:text-white">{item.label}</div>
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">{item.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  onClick={handleGenerateFollowUp}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-600/30 disabled:opacity-60 transition-all active:scale-95 cursor-pointer"
-                >
-                  <Sparkles className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                  <span>{loading ? 'Escrevendo Follow-up...' : 'Criar Mensagem de Follow-up'}</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: CHAT LIVRE COM GEMINI */}
-          {activeTab === 'chat' && (
-            <div className="flex flex-col h-[400px] border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-850 overflow-hidden">
-              <div className="flex-1 overflow-y-auto p-3.5 space-y-3 bg-slate-50/30 dark:bg-slate-900/40">
-                {chatMessages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex items-start gap-2.5 ${
-                      msg.role === 'user' ? 'justify-end' : 'justify-start'
-                    }`}
-                  >
-                    {msg.role === 'model' && (
-                      <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 text-xs shadow-sm mt-0.5">
-                        ⚡
-                      </div>
-                    )}
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed whitespace-pre-line shadow-sm ${
-                        msg.role === 'user'
-                          ? 'bg-emerald-600 text-white rounded-tr-none'
-                          : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-tl-none'
-                      }`}
-                    >
-                      {msg.text}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      {GATILHOS_IA.map((g) => (
+                        <button
+                          key={g.id}
+                          onClick={() => setSelectedGatilho(g.id)}
+                          className={`text-left p-3 rounded-xl border text-xs transition-all cursor-pointer ${
+                            selectedGatilho === g.id
+                              ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 shadow-sm ring-1 ring-emerald-500'
+                              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-slate-300 dark:hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="font-bold text-slate-900 dark:text-white mb-1">{g.titulo}</div>
+                          <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">{g.descricao}</p>
+                        </button>
+                      ))}
                     </div>
-                    {msg.role === 'user' && (
-                      <div className="w-7 h-7 rounded-lg bg-slate-700 text-white flex items-center justify-center shrink-0 text-xs shadow-sm mt-0.5">
-                        <User className="w-4 h-4" />
-                      </div>
-                    )}
                   </div>
-                ))}
-                {loading && (
-                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 italic p-2">
-                    <Sparkles className="w-4 h-4 text-emerald-600 animate-spin" />
-                    <span>Gemini 3.8 está digitando sugestão de venda...</span>
+
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <div className="flex-1 min-w-[200px]">
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                        Tom de Voz:
+                      </label>
+                      <select
+                        value={tomVoz}
+                        onChange={(e) => setTomVoz(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100"
+                      >
+                        <option>Profissional e caloroso</option>
+                        <option>Direto e urgente</option>
+                        <option>Consultivo e amigável</option>
+                        <option>Premium e exclusivo</option>
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={handleGenerateFechamento}
+                      disabled={loading}
+                      className="mt-5 px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>{loading ? 'Gerando com Gemini...' : 'Gerar Mensagem de Fechamento'}</span>
+                    </button>
                   </div>
-                )}
-              </div>
-
-              <div className="p-2.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="Pergunte ao Gemini: 'Como fechar esse cliente sem dar mais desconto?'..."
-                  value={inputChat}
-                  onChange={(e) => setInputChat(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendChatMessage()}
-                  className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:bg-white dark:focus:bg-slate-750 focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-                <button
-                  onClick={handleSendChatMessage}
-                  disabled={loading || !inputChat.trim()}
-                  className="p-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm cursor-pointer"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* GENERATED TEXT AREA (FOR GATILHOS, OBJEÇÕES, FOLLOW-UP) */}
-          {activeTab !== 'chat' && generatedText && (
-            <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span>Mensagem Pronta para WhatsApp (Editável):</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleCopyText(generatedText)}
-                    className="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg transition-colors shadow-sm cursor-pointer"
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span className="text-emerald-700 dark:text-emerald-400">Copiado!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copiar</span>
-                      </>
-                    )}
-                  </button>
+              )}
 
-                  <button
-                    onClick={() => handleSendToWhatsApp(generatedText)}
-                    className="flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1 rounded-lg shadow-sm transition-all cursor-pointer"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Enviar no WhatsApp</span>
-                  </button>
+              {/* TAB 2: FOLLOW-UP AUTOMÁTICO WHATSAPP */}
+              {activeTab === 'followup' && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 text-xs text-purple-900 dark:text-purple-300">
+                    <p className="font-semibold mb-1">Assistente de Follow-up Inteligente FechaZap (TURBO)</p>
+                    <p className="leading-relaxed">
+                      Envie uma mensagem educada perguntando se o cliente tem alguma dúvida para fechar o serviço.
+                      O disparo usa a conta comercial integrada com fallback garantido para o link direto do WhatsApp (wa.me).
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                        Dias desde a proposta:
+                      </label>
+                      <select
+                        value={diasFollowUp}
+                        onChange={(e) => setDiasFollowUp(Number(e.target.value))}
+                        className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100"
+                      >
+                        <option value={1}>1 dia (Lembrete rápido)</option>
+                        <option value={2}>2 dias (Recomendado)</option>
+                        <option value={4}>4 dias (Recuperação)</option>
+                        <option value={7}>7 dias (Última chance)</option>
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={handleGenerateFollowUp}
+                      disabled={loading}
+                      className="mt-5 px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>{loading ? 'Criando...' : 'Gerar Mensagem de Follow-up'}</span>
+                    </button>
+
+                    <button
+                      onClick={handleDispararWhatsAppAutomatico}
+                      disabled={followUpDispatching}
+                      className="mt-5 px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60 cursor-pointer ml-auto"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>{followUpDispatching ? 'Disparando...' : 'Disparar via WhatsApp'}</span>
+                    </button>
+                  </div>
+
+                  {lastFallbackUrl && (
+                    <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between text-xs">
+                      <span className="text-emerald-800 dark:text-emerald-300">
+                        Link de contingência pronto para WhatsApp Web/App:
+                      </span>
+                      <a
+                        href={lastFallbackUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:underline"
+                      >
+                        <span>Abrir WhatsApp</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
 
-              <textarea
-                value={generatedText}
-                onChange={(e) => setGeneratedText(e.target.value)}
-                rows={6}
-                className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-3.5 text-xs text-slate-800 dark:text-slate-100 font-mono leading-relaxed focus:ring-2 focus:ring-emerald-500 shadow-inner"
-              />
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
-                *Dica: Você pode editar o texto acima antes de copiar ou enviar no WhatsApp. Os asteriscos (*texto*) viram negrito no WhatsApp.*
-              </p>
+              {/* TAB 3: ANÁLISE DE PREÇOS NO HISTÓRICO */}
+              {activeTab === 'precificacao' && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 text-xs text-blue-900 dark:text-blue-300">
+                    <p className="font-semibold mb-1">Precificação Inteligente Baseada nos Seus Dados Reais</p>
+                    <p className="leading-relaxed">
+                      O Gemini consulta o histórico de orçamentos anteriores aprovados e pendentes da sua conta no Supabase,
+                      calculando suas médias reais de mercado para você nunca cobrar abaixo nem perder serviço por preço fora da curva.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex-1 min-w-[220px]">
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                        Serviço ou Item a Analisar:
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Instalação Elétrica, Pintura, Consultoria..."
+                        value={servicoAnalise}
+                        onChange={(e) => setServicoAnalise(e.target.value)}
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100"
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleAnalisarPrecos}
+                      disabled={loading}
+                      className="mt-5 px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                    >
+                      <TrendingUp className="w-4 h-4" />
+                      <span>{loading ? 'Analisando...' : 'Analisar Histórico de Preços'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Generated Text Box */}
+              {generatedText && (
+                <div className="mt-6 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                      Resultado Gerado pela IA:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleCopy}
+                        className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copied ? 'Copiado' : 'Copiar'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleSendWhatsAppManual(generatedText)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Enviar no WhatsApp</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-800 dark:text-slate-100 whitespace-pre-wrap font-sans leading-relaxed shadow-xs">
+                    {generatedText}
+                  </div>
+                </div>
+              )}
+
             </div>
-          )}
-        </div>
-
-        {/* Footer info */}
-        <div className="bg-slate-100 dark:bg-slate-850 border-t border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 shrink-0">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Modelo: <strong>gemini-3.8-flash</strong> (Google Gen AI)</span>
-          </div>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold cursor-pointer"
-          >
-            Fechar
-          </button>
-        </div>
+          </>
+        )}
 
       </div>
     </div>
