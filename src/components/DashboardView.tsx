@@ -15,10 +15,11 @@ import {
   BookOpen,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { Orcamento, Cliente, ConfiguracaoEmpresa, StatusOrcamento } from '../types';
+import { Orcamento, Cliente, ConfiguracaoEmpresa, StatusOrcamento, TipoPlano } from '../types';
 import { formatCurrency, formatDate, formatPhone, getStatusBadge } from '../utils/format';
 import { generateWhatsAppQuoteText, openWhatsAppMessage } from '../utils/whatsapp';
 import { ReceitaAcumuladaChart } from './ReceitaAcumuladaChart';
+import { AdBanner } from './AdBanner';
 
 interface DashboardViewProps {
   orcamentos: Orcamento[];
@@ -30,6 +31,8 @@ interface DashboardViewProps {
   onUpdateStatus: (orcamentoId: string, status: StatusOrcamento) => void;
   onShowToast: (title: string, desc?: string, type?: 'success' | 'error' | 'info') => void;
   onOpenTutorial?: () => void;
+  userPlano?: TipoPlano;
+  onOpenPerfil?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -42,6 +45,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onUpdateStatus,
   onShowToast,
   onOpenTutorial,
+  userPlano = 'GRATUITO',
+  onOpenPerfil,
 }) => {
   // Métricas
   const totalOrcamentos = orcamentos.length;
@@ -331,6 +336,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           })}
         </div>
       </div>
+
+      {/* Placeholder de anúncio discreto para plano GRATUITO */}
+      <AdBanner userPlano={userPlano} onOpenPerfil={onOpenPerfil} />
     </div>
   );
 };

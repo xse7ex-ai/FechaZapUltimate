@@ -16,6 +16,7 @@ import {
 import { Cliente, Orcamento } from '../types';
 import { formatCurrency, formatPhone } from '../utils/format';
 import { openWhatsAppMessage } from '../utils/whatsapp';
+import { generateUUID } from '../utils/uuid';
 
 interface ClientesViewProps {
   clientes: Cliente[];
@@ -79,7 +80,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     }
 
     const cliente: Cliente = {
-      id: editingCliente ? editingCliente.id : `cli-${Date.now()}`,
+      id: editingCliente ? editingCliente.id : generateUUID(),
       nome: nome.trim(),
       telefone: telefone.trim(),
       email: email.trim() || undefined,

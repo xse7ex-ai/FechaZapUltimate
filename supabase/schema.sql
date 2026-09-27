@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 -- 3. Tabela de Clientes
 CREATE TABLE IF NOT EXISTS public.clientes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   nome TEXT NOT NULL,
   telefone TEXT NOT NULL,
@@ -40,10 +40,10 @@ CREATE TABLE IF NOT EXISTS public.clientes (
 
 -- 4. Tabela de Orçamentos (Status padronizados: pendente, enviado, aprovado, recusado)
 CREATE TABLE IF NOT EXISTS public.orcamentos (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   numero TEXT NOT NULL,
-  cliente_id UUID REFERENCES public.clientes(id) ON DELETE SET NULL,
+  cliente_id TEXT REFERENCES public.clientes(id) ON DELETE SET NULL,
   cliente_nome TEXT NOT NULL,
   cliente_telefone TEXT NOT NULL,
   itens JSONB NOT NULL DEFAULT '[]'::jsonb,

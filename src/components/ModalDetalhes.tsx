@@ -12,8 +12,9 @@ import {
   Building,
   User,
   ShieldAlert,
+  Crown,
 } from 'lucide-react';
-import { Orcamento, ConfiguracaoEmpresa, StatusOrcamento } from '../types';
+import { Orcamento, ConfiguracaoEmpresa, StatusOrcamento, TipoPlano } from '../types';
 import { formatCurrency, formatDate, formatPhone, getStatusBadge } from '../utils/format';
 import { generateWhatsAppQuoteText, openWhatsAppMessage } from '../utils/whatsapp';
 import { imprimirOrcamento } from '../utils/pdf';
@@ -25,7 +26,9 @@ interface ModalDetalhesProps {
   empresa: ConfiguracaoEmpresa;
   onOpenIAForOrcamento: (orcamentoId: string) => void;
   onUpdateStatus: (orcamentoId: string, status: StatusOrcamento) => void;
-  onShowToast: (title: string, desc?: string, type?: 'success' | 'error' | 'info') => void;
+  onShowToast: (title: string, desc?: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
+  userPlano?: TipoPlano;
+  onOpenPerfil?: () => void;
 }
 
 export const ModalDetalhes: React.FC<ModalDetalhesProps> = ({
@@ -36,6 +39,8 @@ export const ModalDetalhes: React.FC<ModalDetalhesProps> = ({
   onOpenIAForOrcamento,
   onUpdateStatus,
   onShowToast,
+  userPlano = 'GRATUITO',
+  onOpenPerfil,
 }) => {
   if (!isOpen || !orcamento) return null;
 
@@ -55,6 +60,16 @@ export const ModalDetalhes: React.FC<ModalDetalhesProps> = ({
   };
 
   const handlePrint = () => {
+    // REGRA DE NEGÓCIO: Exportação de PDF exclusiva para PRO e TURBO
+    if (userPlano === 'GRATUITO') {
+      onShowToast(
+        'Recurso Exclusivo PRO / TURBO',
+        'A geração e exportação de PDF profissional com logo, PIX e termos é exclusiva para os planos PRO e TURBO. Faça upgrade para desbloquear.',
+        'warning'
+      );
+      onOpenPerfil?.();
+      return;
+    }
     imprimirOrcamento(orcamento, empresa);
   };
 
@@ -228,10 +243,24 @@ export const ModalDetalhes: React.FC<ModalDetalhesProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold transition-colors cursor-pointer"
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors cursor-pointer ${
+                userPlano === 'GRATUITO'
+                  ? 'border-amber-300 dark:border-amber-800/80 text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50'
+                  : 'border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
+              title={userPlano === 'GRATUITO' ? 'Exclusivo para assinantes PRO e TURBO' : 'Imprimir proposta em PDF'}
             >
-              <Printer className="w-3.5 h-3.5" />
+              {userPlano === 'GRATUITO' ? (
+                <Crown className="w-3.5 h-3.5 text-amber-500" />
+              ) : (
+                <Printer className="w-3.5 h-3.5" />
+              )}
               <span>Imprimir / PDF</span>
+              {userPlano === 'GRATUITO' && (
+                <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200">
+                  PRO
+                </span>
+              )}
             </button>
             <button
               onClick={handleCopyFormattedText}

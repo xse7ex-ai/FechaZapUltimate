@@ -34,6 +34,16 @@ import { Toast, ToastMessage } from './components/Toast';
 import { NotificationBanner } from './components/NotificationBanner';
 import { checkGeminiStatus } from './utils/ai';
 import { fetchServerUserProfileAndQuota } from './utils/supabase';
+import { generateUUID } from './utils/uuid';
+import {
+  isCloudSyncEnabled,
+  fetchCloudData,
+  syncSaveOrcamento,
+  syncDeleteOrcamento,
+  syncSaveCliente,
+  syncDeleteCliente,
+  flushPendingSyncQueue,
+} from './utils/sync';
 import {
   getOrcamentosProximosValidade,
   dispararNotificacaoNativa,
@@ -111,10 +121,55 @@ export default function App() {
     localStorage.setItem('fechazap_empresa_v3', JSON.stringify(empresa));
   }, [empresa]);
 
+  const syncWithCloud = async (plano: TipoPlano) => {
+    if (!isCloudSyncEnabled(plano)) return;
+    try {
+      // 1. Processa fila pendente offline se houver
+      await flushPendingSyncQueue(plano);
+
+      // 2. Busca dados atualizados da nuvem no Supabase
+      const cloud = await fetchCloudData(plano);
+      if (cloud) {
+        if (cloud.orcamentos.length > 0 || cloud.clientes.length > 0) {
+          // Servidor possui dados: mescla preservando criações locais offline
+          setOrcamentos((prev) => {
+            const cloudIds = new Set(cloud.orcamentos.map((c) => c.id));
+            const localOnly = prev.filter((p) => !cloudIds.has(p.id));
+            // Sincroniza em segundo plano os itens que existiam apenas localmente
+            localOnly.forEach((o) => syncSaveOrcamento(o, plano));
+            return [...cloud.orcamentos, ...localOnly];
+          });
+
+          setClientes((prev) => {
+            const cloudIds = new Set(cloud.clientes.map((c) => c.id));
+            const localOnly = prev.filter((p) => !cloudIds.has(p.id));
+            localOnly.forEach((c) => syncSaveCliente(c, plano));
+            return [...cloud.clientes, ...localOnly];
+          });
+        } else {
+          // Servidor ainda vazio (primeiro acesso PRO/TURBO): sobe dados locais do usuário para a nuvem
+          setOrcamentos((currentOrcamentos) => {
+            currentOrcamentos.forEach((o) => syncSaveOrcamento(o, plano));
+            return currentOrcamentos;
+          });
+          setClientes((currentClientes) => {
+            currentClientes.forEach((c) => syncSaveCliente(c, plano));
+            return currentClientes;
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Erro ao sincronizar com nuvem:', err);
+    }
+  };
+
   const loadUserProfile = () => {
     fetchServerUserProfileAndQuota()
       .then((data) => {
         setUserPlano(data.user.plano);
+        if (isCloudSyncEnabled(data.user.plano)) {
+          syncWithCloud(data.user.plano);
+        }
       })
       .catch(() => {
         setUserPlano('GRATUITO');
@@ -124,6 +179,17 @@ export default function App() {
   useEffect(() => {
     loadUserProfile();
   }, []);
+
+  // Listener para reprocessar fila quando a conexão cair e voltar
+  useEffect(() => {
+    const handleOnline = () => {
+      if (isCloudSyncEnabled(userPlano)) {
+        flushPendingSyncQueue(userPlano);
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [userPlano]);
 
   // Initial check of Gemini API Health (Server-side/Worker)
   useEffect(() => {
@@ -216,9 +282,14 @@ export default function App() {
 
   // Status Updater
   const handleUpdateStatus = (orcamentoId: string, newStatus: StatusOrcamento) => {
-    setOrcamentos((prev) =>
-      prev.map((o) => (o.id === orcamentoId ? { ...o, status: newStatus } : o))
-    );
+    setOrcamentos((prev) => {
+      const updatedList = prev.map((o) => (o.id === orcamentoId ? { ...o, status: newStatus } : o));
+      const target = updatedList.find((o) => o.id === orcamentoId);
+      if (target && isCloudSyncEnabled(userPlano)) {
+        syncSaveOrcamento(target, userPlano);
+      }
+      return updatedList;
+    });
     if (selectedOrcamento && selectedOrcamento.id === orcamentoId) {
       setSelectedOrcamento((prev) => (prev ? { ...prev, status: newStatus } : null));
     }
@@ -232,11 +303,11 @@ export default function App() {
       (o) => o.dataCriacao && o.dataCriacao.startsWith(mesAtual)
     );
 
-    // REGRA DE NEGÓCIO: GRATUITO possui limite estrito de 5 orçamentos/mês
+    // REGRA DE NEGÓCIO: GRATUITO possui limite estrito de 5 orçamentos/mês (100% client-side)
     if (!isEditing && userPlano === 'GRATUITO' && orcamentosMes.length >= 5) {
       addToast(
         'Limite de Orçamentos Atingido',
-        'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados.',
+        'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados e sincronizar na nuvem.',
         'error',
         {
           label: 'Ver Planos',
@@ -249,6 +320,9 @@ export default function App() {
 
     if (newCliente) {
       setClientes((prev) => [newCliente, ...prev]);
+      if (isCloudSyncEnabled(userPlano)) {
+        syncSaveCliente(newCliente, userPlano);
+      }
     }
 
     setOrcamentos((prev) => {
@@ -258,6 +332,11 @@ export default function App() {
       }
       return [savedOrcamento, ...prev];
     });
+
+    // Gravação na nuvem Supabase (PRO e TURBO)
+    if (isCloudSyncEnabled(userPlano)) {
+      syncSaveOrcamento(savedOrcamento, userPlano);
+    }
 
     addToast(
       'Orçamento Salvo!',
@@ -269,6 +348,9 @@ export default function App() {
   // Delete quote
   const handleDeleteOrcamento = (orcamentoId: string) => {
     setOrcamentos((prev) => prev.filter((o) => o.id !== orcamentoId));
+    if (isCloudSyncEnabled(userPlano)) {
+      syncDeleteOrcamento(orcamentoId, userPlano);
+    }
     addToast('Orçamento Excluído', 'O orçamento foi removido.', 'info');
   };
 
@@ -277,12 +359,15 @@ export default function App() {
     const nextNum = String(Number(orc.numero || 100) + 1);
     const duplicated: Orcamento = {
       ...orc,
-      id: `orc-${Date.now()}`,
+      id: generateUUID(),
       numero: nextNum,
       status: 'pendente',
       dataCriacao: new Date().toISOString().split('T')[0],
     };
     setOrcamentos((prev) => [duplicated, ...prev]);
+    if (isCloudSyncEnabled(userPlano)) {
+      syncSaveOrcamento(duplicated, userPlano);
+    }
     addToast(
       'Orçamento Duplicado!',
       `Criada a cópia #${duplicated.numero} pronta para edição.`,
@@ -299,11 +384,17 @@ export default function App() {
       }
       return [cliente, ...prev];
     });
+    if (isCloudSyncEnabled(userPlano)) {
+      syncSaveCliente(cliente, userPlano);
+    }
   };
 
   // Delete client
   const handleDeleteCliente = (clienteId: string) => {
     setClientes((prev) => prev.filter((c) => c.id !== clienteId));
+    if (isCloudSyncEnabled(userPlano)) {
+      syncDeleteCliente(clienteId, userPlano);
+    }
     addToast('Cliente Excluído', 'O cadastro do cliente foi removido.', 'info');
   };
 
@@ -399,6 +490,8 @@ export default function App() {
               onUpdateStatus={handleUpdateStatus}
               onShowToast={addToast}
               onOpenTutorial={() => setIsTutorialOpen(true)}
+              userPlano={userPlano}
+              onOpenPerfil={() => setIsPerfilOpen(true)}
             />
           )}
 
@@ -476,6 +569,8 @@ export default function App() {
         onOpenIAForOrcamento={handleOpenIAForOrcamento}
         onUpdateStatus={handleUpdateStatus}
         onShowToast={addToast}
+        userPlano={userPlano}
+        onOpenPerfil={() => setIsPerfilOpen(true)}
       />
 
       <ModalIA

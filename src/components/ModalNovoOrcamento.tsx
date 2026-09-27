@@ -3,6 +3,7 @@ import { X, Plus, Trash2, Calculator, UserCheck, Sparkles, Mic, MicOff, Crown } 
 import { Orcamento, Cliente, ItemOrcamento, TipoPlano } from '../types';
 import { formatCurrency } from '../utils/format';
 import { gerarOrcamentoComIA } from '../utils/ai';
+import { generateUUID } from '../utils/uuid';
 
 interface ModalNovoOrcamentoProps {
   isOpen: boolean;
@@ -138,7 +139,7 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
         alert('Informe o nome do novo cliente.');
         return;
       }
-      const newId = `cli-${Date.now()}`;
+      const newId = generateUUID();
       novoClienteCriado = {
         id: newId,
         nome: novoNome.trim(),
@@ -163,7 +164,7 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
     }
 
     const orcamentoSalvo: Orcamento = {
-      id: orcamentoToEdit ? orcamentoToEdit.id : `orc-${Date.now()}`,
+      id: orcamentoToEdit ? orcamentoToEdit.id : generateUUID(),
       numero: orcamentoToEdit ? orcamentoToEdit.numero : nextNumero,
       clienteId: clienteFinalId,
       clienteNome: clienteFinalNome,

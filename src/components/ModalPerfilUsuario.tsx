@@ -321,15 +321,19 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                    <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5 mt-3">
                      <li className="flex items-center gap-1.5">
                        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                       <span>5 orçamentos / mês</span>
+                       <span>5 orçamentos manuais / mês</span>
                      </li>
                      <li className="flex items-center gap-1.5">
                        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                       <span>PDF e WhatsApp</span>
+                       <span>100% local no dispositivo</span>
                      </li>
                      <li className="flex items-center gap-1.5">
-                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                       <span>Dados salvos no seu celular</span>
+                       <CheckCircle2 className="w-3 h-3 text-slate-400 shrink-0" />
+                       <span>0 créditos de IA</span>
+                     </li>
+                     <li className="flex items-center gap-1.5">
+                       <CheckCircle2 className="w-3 h-3 text-slate-400 shrink-0" />
+                       <span>Exibe anúncios parceiros</span>
                      </li>
                    </ul>
                  </div>
@@ -356,15 +360,15 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>0 créditos de IA (gestão manual)</span>
+                      <span><strong>Sincronização na Nuvem</strong> (Supabase)</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Sincronização Segura na Nuvem</span>
+                      <span><strong>Exportação PDF</strong> com Logo e PIX</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Multi-dispositivos</span>
+                      <span>Sem anúncios / 0 créditos IA</span>
                     </li>
                   </ul>
                 </div>
@@ -387,7 +391,11 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                   <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5 mt-3">
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span><strong>1.500 IA</strong> / mês (Gemini)</span>
+                      <span><strong>Tudo do plano PRO</strong></span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                      <span><strong>1.500 IA</strong> / mês (Gemini 3.8)</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
@@ -395,11 +403,11 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Análise Inteligente de Preços</span>
+                      <span>Criação de Propostas por Voz e Texto</span>
                     </li>
                     <li className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Criação de Propostas por Voz</span>
+                      <span>Análise Inteligente de Preços</span>
                     </li>
                   </ul>
                 </div>
