@@ -1,11 +1,11 @@
 // Supabase Edge Function: whatsapp-followup
 // Assistente Automatizado de Follow-up via WhatsApp (Exclusivo para Plano TURBO)
 // Arquitetura:
-//   - Credenciais Meta WhatsApp Cloud API são segredos ÚNICOS do servidor (WHATSAPP_TOKEN, PHONE_NUMBER_ID)
-//   - NUNCA aceita token/phone_id do body da requisição
-//   - Validação de que o orcamentoId pertence ao usuário autenticado (Tenant Isolation)
-//   - Validação de plano TURBO na tabela public.profiles
-//   - Fallback Universal para link direto (wa.me) quando a Meta API não estiver configurada ou falhar
+//   - Validação estrita de Tenant Isolation (orcamentoId pertence ao user.id autenticado)
+//   - Verificação obrigatória de Opt-in/Opt-out do cliente antes do envio
+//   - Consumo de quota atômica de IA apenas após validação de parâmetros e elegibilidade
+//   - Envio exclusivo via Template pré-aprovado da Meta (SEM fallback automático para texto livre)
+//   - Suporte à conexão WhatsApp multi-tenant do usuário com fallback central
 
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
@@ -33,9 +33,9 @@ Deno.serve(async (req) => {
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || '';
 
-  // Segredos ÚNICOS do servidor (não por usuário)
-  const metaToken = Deno.env.get('WHATSAPP_TOKEN') || '';
-  const metaPhoneId = Deno.env.get('PHONE_NUMBER_ID') || '';
+  // Credenciais padrão centrais do servidor
+  const defaultMetaToken = Deno.env.get('WHATSAPP_TOKEN') || '';
+  const defaultMetaPhoneId = Deno.env.get('PHONE_NUMBER_ID') || '';
   const metaTemplateName = Deno.env.get('WHATSAPP_TEMPLATE_NAME') || 'fechazap_followup';
 
   try {
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2. Validação de Segurança (CRÍTICO): Plano TURBO exigido no servidor
+    // 2. Validação de Plano TURBO no servidor
     const { data: profile, error: profileErr } = await supabaseAdmin
       .from('profiles')
       .select('id, email, nome, plano')
@@ -105,37 +105,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Consumo Atômico de Cota de IA
-    const { data: quota, error: quotaErr } = await supabaseAdmin.rpc('consume_ai_quota', {
-      p_user_id: user.id,
-      p_tipo_operacao: 'whatsapp_followup_turbo',
-      p_modelo: 'gemini-3.8-flash',
-    });
-
-    if (quotaErr || !quota) {
-      console.error('[consume_ai_quota RPC Error]:', quotaErr);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Serviço de quota temporariamente indisponível.',
-        }),
-        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!quota.allowed) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: quota.error || `Limite mensal de IA atingido (${quota.used}/${quota.limit}).`,
-          quotaExceeded: true,
-          quota,
-        }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 4. Busca de Dados: SELECT na tabela orçamentos com filtro user_id (Tenant Isolation)
+    // 3. Validação de Propriedade do Orçamento (Tenant Isolation)
     const { data: orcamento, error: orcErr } = await supabaseAdmin
       .from('orcamentos')
       .select('*')
@@ -158,7 +128,91 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 5. Consulta personalizações da empresa do usuário (Nome fantasia para a mensagem)
+    const phoneClean = cleanPhoneNumber(telefoneDestino);
+    const digitsOnly = phoneClean.replace(/\D/g, '');
+    const lastDigits = digitsOnly.length >= 8 ? digitsOnly.slice(-8) : digitsOnly;
+
+    // 4. Verificação de Opt-in / Opt-out do Cliente (LGPD e Políticas Meta)
+    let clienteData: any = null;
+    if (orcamento.cliente_id) {
+      const { data: cliById } = await supabaseAdmin
+        .from('clientes')
+        .select('id, nome, whatsapp_opt_in, whatsapp_opt_out_at')
+        .eq('id', orcamento.cliente_id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      clienteData = cliById;
+    }
+
+    if (!clienteData) {
+      const { data: cliByPhone } = await supabaseAdmin
+        .from('clientes')
+        .select('id, nome, whatsapp_opt_in, whatsapp_opt_out_at')
+        .eq('user_id', user.id)
+        .ilike('telefone', `%${lastDigits}%`)
+        .limit(1)
+        .maybeSingle();
+      clienteData = cliByPhone;
+    }
+
+    // Se o cliente solicitou descadastro prévio, bloqueia envio automático
+    if (clienteData && (clienteData.whatsapp_opt_in === false || clienteData.whatsapp_opt_out_at)) {
+      const directUrl = buildDirectWhatsAppUrl(phoneClean, `Olá, ${orcamento.cliente_nome || 'Cliente'}.`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'O cliente solicitou descadastro (opt-out) e não recebe mensagens automatizadas. Você pode abrir o WhatsApp para contato manual.',
+          code: 'CLIENT_OPTED_OUT',
+          fallbackUrl: directUrl,
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 5. Verificação da Conexão WhatsApp Multi-Tenant do Usuário
+    let effectivePhoneId = defaultMetaPhoneId;
+    let effectiveToken = defaultMetaToken;
+
+    const { data: userConn } = await supabaseAdmin
+      .from('whatsapp_connections')
+      .select('phone_number_id, status')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (userConn?.phone_number_id) {
+      effectivePhoneId = userConn.phone_number_id;
+    }
+
+    // 6. CONSUMO ATÔMICO DE QUOTA DE IA
+    // Executado exclusivamente após validação completa de autorização, orçamento e opt-in
+    const { data: quota, error: quotaErr } = await supabaseAdmin.rpc('consume_ai_quota', {
+      p_user_id: user.id,
+      p_tipo_operacao: 'whatsapp_followup_turbo',
+      p_modelo: 'gemini-3.8-flash',
+    });
+
+    if (quotaErr || !quota) {
+      console.error('[consume_ai_quota RPC Error]:', quotaErr);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Serviço de quota temporariamente indisponível.' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!quota.allowed) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: quota.error || `Limite mensal de IA atingido (${quota.used}/${quota.limit}).`,
+          quotaExceeded: true,
+          quota,
+        }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 7. Dados para Formatação da Mensagem
     const { data: userConfig } = await supabaseAdmin
       .from('configuracoes')
       .select('nome_fantasia')
@@ -177,7 +231,7 @@ Deno.serve(async (req) => {
       primeiroServico = orcamento.itens[0].descricao;
     }
 
-    // 6. Geração da Mensagem Persuasiva (Gemini com fallback determinístico)
+    // 8. Geração da Mensagem Persuasiva (Gemini)
     let messageText = `Olá, *${clienteNome}*! Tudo bem? Aqui é da *${empresaNome}*. 🤝
 
 Passando rapidamente para saber se você conseguiu avaliar a proposta referente a *${primeiroServico}* no valor de *${valorTotalFormatado}*.
@@ -218,17 +272,14 @@ Objetivo: Perguntar se restou alguma dúvida para fechar o serviço. Use negrito
           }
         }
       } catch (err) {
-        console.warn('Gemini follow-up generation failed, using standard template text:', err);
+        console.warn('Falha na chamada Gemini para follow-up, utilizando texto padrão:', err);
       }
     }
 
-    // 7. Fallback Universal URL (wa.me) sempre gerado
-    const phoneClean = cleanPhoneNumber(telefoneDestino);
     const fallbackUrl = buildDirectWhatsAppUrl(phoneClean, messageText);
 
-    // 8. Disparo via Meta WhatsApp Cloud API (Conta Única do Servidor)
-    // Se o segredo não estiver configurado, cai automaticamente para o link direto
-    if (!metaToken || !metaPhoneId) {
+    // 9. Disparo via Meta WhatsApp Cloud API
+    if (!effectiveToken || !effectivePhoneId) {
       return new Response(
         JSON.stringify({
           success: true,
@@ -236,7 +287,7 @@ Objetivo: Perguntar se restou alguma dúvida para fechar o serviço. Use negrito
           messageId: undefined,
           text: messageText,
           fallbackUrl,
-          notice: 'Meta Cloud API não configurada no servidor. Mensagem pronta gerada para envio via WhatsApp Web/App.',
+          notice: 'Meta Cloud API não configurada. Utilize o envio manual via link direto.',
           quotaRemaining: quota.remaining,
           orcamento: {
             id: orcamento.id,
@@ -249,11 +300,10 @@ Objetivo: Perguntar se restou alguma dúvida para fechar o serviço. Use negrito
       );
     }
 
-    // Tenta disparo via Meta Cloud API com Template pré-aprovado ou Mensagem de Texto
+    // Envio estrito via Template pré-aprovado
+    // REGRA DE SEGURANÇA: SEM fallback automático para texto livre
     try {
-      const metaUrl = `https://graph.facebook.com/v19.0/${metaPhoneId}/messages`;
-      
-      // Tenta primeiro via template pré-aprovado da Meta
+      const metaUrl = `https://graph.facebook.com/v19.0/${effectivePhoneId}/messages`;
       const templatePayload = {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
@@ -275,41 +325,32 @@ Objetivo: Perguntar se restou alguma dúvida para fechar o serviço. Use negrito
         },
       };
 
-      let metaRes = await fetch(metaUrl, {
+      const metaRes = await fetch(metaUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${metaToken}`,
+          Authorization: `Bearer ${effectiveToken}`,
         },
         body: JSON.stringify(templatePayload),
       });
 
-      // Se falhar o template (ex.: template não aprovado ou janela 24h), tenta envio como texto direto
-      if (!metaRes.ok) {
-        const textPayload = {
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: phoneClean,
-          type: 'text',
-          text: {
-            preview_url: false,
-            body: messageText,
-          },
-        };
-
-        metaRes = await fetch(metaUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${metaToken}`,
-          },
-          body: JSON.stringify(textPayload),
-        });
-      }
-
       const metaData = await metaRes.json().catch(() => ({}));
 
       if (metaRes.ok && metaData?.messages?.[0]?.id) {
+        // Registra mensagem enviada na tabela
+        await supabaseAdmin.from('mensagens_whatsapp').insert({
+          user_id: user.id,
+          phone_number_id: effectivePhoneId,
+          cliente_telefone: phoneClean,
+          cliente_nome: clienteNome,
+          corpo: messageText,
+          direcao: 'outbound',
+          status: 'sent',
+          lida: true,
+          wa_message_id: metaData.messages[0].id,
+          orcamento_id: orcamento.id,
+        });
+
         return new Response(
           JSON.stringify({
             success: true,
@@ -328,45 +369,35 @@ Objetivo: Perguntar se restou alguma dúvida para fechar o serviço. Use negrito
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       } else {
-        console.warn('[Meta Cloud API Warning]:', metaData);
-        // Fallback gracioso: Não quebra a experiência do usuário
+        // Log técnico sem vazar credenciais
+        const errorCode = metaData?.error?.code || 'META_API_ERROR';
+        const errorMessage = metaData?.error?.message || 'Falha no envio do template pré-aprovado pela Meta.';
+        console.warn(`[whatsapp-followup] Falha no template Meta (Code: ${errorCode}): ${errorMessage}`);
+
+        // Retorna erro compreensível com a opção manual transparente via wa.me
         return new Response(
           JSON.stringify({
-            success: true,
-            provider: 'wa_me_fallback',
-            text: messageText,
+            success: false,
+            provider: 'meta-cloud-api',
+            error: 'Não foi possível enviar o acompanhamento pelo WhatsApp comercial oficial da Meta. Você pode abrir o WhatsApp e enviar manualmente.',
+            code: errorCode,
             fallbackUrl,
-            metaError: metaData?.error?.message || 'Meta API não concluiu o envio direto.',
-            notice: 'Disparo direto indisponível no momento. Use o link do WhatsApp com a mensagem pronta.',
             quotaRemaining: quota.remaining,
-            orcamento: {
-              id: orcamento.id,
-              numero: orcamento.numero,
-              clienteNome,
-              clienteTelefone: telefoneDestino,
-            },
           }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     } catch (metaErr: any) {
-      console.warn('[Meta API Exception]:', metaErr?.message);
+      console.warn('[whatsapp-followup Exception na Meta API]:', metaErr?.message);
       return new Response(
         JSON.stringify({
-          success: true,
-          provider: 'wa_me_fallback',
-          text: messageText,
+          success: false,
+          provider: 'meta-cloud-api',
+          error: 'Erro de comunicação com a Meta Graph API. Utilize o envio manual pelo WhatsApp.',
           fallbackUrl,
-          notice: 'Erro de conexão com Meta API. Redirecionando para o WhatsApp Web.',
           quotaRemaining: quota.remaining,
-          orcamento: {
-            id: orcamento.id,
-            numero: orcamento.numero,
-            clienteNome,
-            clienteTelefone: telefoneDestino,
-          },
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
   } catch (err: any) {

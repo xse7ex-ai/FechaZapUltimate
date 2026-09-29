@@ -1,13 +1,6 @@
 // Supabase Edge Function: whatsapp-webhook
 // Receptor Inbound de Mensagens do WhatsApp Cloud API (Meta)
-// Responsabilidades:
-//   1. GET: Verificação oficial do webhook com verificação de 'hub.challenge' e 'hub.verify_token'
-//   2. POST: Recebimento de mensagens dos clientes
-//      - Validação de integridade HMAC-SHA256 (X-Hub-Signature-256)
-//      - Resposta HTTP 200 imediata para conformidade com a Meta
-//      - Idempotência rigorosa usando wa_message_id
-//      - Roteamento e descoberta do prestador dono (com base em orçamentos e clientes)
-//      - Gravação exclusiva no banco com service_role na tabela public.mensagens_whatsapp
+// Arquitetura Multi-Tenant & Hardening de Segurança
 
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
@@ -25,7 +18,8 @@ function cleanPhoneNumber(phone: string): string {
 }
 
 /**
- * Validação de Assinatura HMAC-SHA256 enviada pela Meta no header X-Hub-Signature-256
+ * Validação de Assinatura HMAC-SHA256 enviada pela Meta no header X-Hub-Signature-256.
+ * Executada estritamente sobre o corpo bruto (raw text) recebido.
  */
 async function verifyMetaHmac(
   rawBody: string,
@@ -65,6 +59,9 @@ async function verifyMetaHmac(
   }
 }
 
+// Palavras-chave normatizadas para cancelamento proativo (Opt-out)
+const OPT_OUT_KEYWORDS = ['STOP', 'SAIR', 'PARAR', 'CANCELAR'];
+
 Deno.serve(async (req) => {
   // CORS Preflight
   if (req.method === 'OPTIONS') {
@@ -74,7 +71,7 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
 
   // =========================================================================
-  // 1. GET: Verificação do Webhook pela Meta
+  // 1. GET: Verificação Oficial do Webhook pela Meta
   // =========================================================================
   if (req.method === 'GET') {
     const mode = url.searchParams.get('hub.mode');
@@ -83,7 +80,6 @@ Deno.serve(async (req) => {
 
     const verifyToken = Deno.env.get('WHATSAPP_VERIFY_TOKEN') || '';
 
-    // Verifica se os parâmetros necessários estão presentes e se o token confere
     if (mode === 'subscribe' && token && challenge) {
       if (verifyToken && token === verifyToken) {
         console.log('[whatsapp-webhook] Verificação da Meta aprovada com sucesso.');
@@ -114,32 +110,35 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const appSecret = Deno.env.get('WHATSAPP_APP_SECRET') || '';
 
-    // Lê o corpo bruto para cálculo do HMAC
-    const rawBody = await req.text();
-
-    // Validação de assinatura HMAC da Meta se o segredo estiver configurado
-    if (appSecret) {
-      const signatureHeader =
-        req.headers.get('x-hub-signature-256') || req.headers.get('X-Hub-Signature-256');
-
-      const isValid = await verifyMetaHmac(rawBody, signatureHeader, appSecret);
-      if (!isValid) {
-        console.warn('[whatsapp-webhook] Assinatura X-Hub-Signature-256 inválida ou ausente.');
-        // Responde 200 para a Meta não ficar reenviando, mas descarta o payload
-        return new Response(
-          JSON.stringify({ status: 'ignored', reason: 'invalid_signature' }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
+    // SEGURANÇA CRÍTICA: Se o segredo do app não estiver configurado, falha fechado imediatamente
+    if (!appSecret) {
+      console.error('[whatsapp-webhook] Configuração crítica ausente: WHATSAPP_APP_SECRET não definido.');
+      return new Response(
+        JSON.stringify({ error: 'Server configuration error: Webhook secret missing' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Inicializa o cliente com Service Role para bypass de RLS e gravação segura
+    // Lê o corpo bruto para cálculo de integridade HMAC
+    const rawBody = await req.text();
+
+    const signatureHeader =
+      req.headers.get('x-hub-signature-256') || req.headers.get('X-Hub-Signature-256');
+
+    const isValid = await verifyMetaHmac(rawBody, signatureHeader, appSecret);
+    if (!isValid) {
+      console.warn('[whatsapp-webhook] Assinatura X-Hub-Signature-256 inválida ou ausente. Requisição rejeitada.');
+      return new Response(
+        JSON.stringify({ error: 'Forbidden: Invalid webhook signature' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     try {
       const payload = JSON.parse(rawBody || '{}');
 
-      // Verifica se é um evento do WhatsApp Business Account
       if (payload.object !== 'whatsapp_business_account' && !payload.entry) {
         return new Response(
           JSON.stringify({ status: 'ignored', reason: 'not_whatsapp_event' }),
@@ -156,7 +155,10 @@ Deno.serve(async (req) => {
           const value = change.value;
           if (!value) continue;
 
-          // Se for notificação de status (sent, delivered, read), não é mensagem de texto
+          // Metadados da Meta: phone_number_id do número comercial receptor
+          const phoneNumberId = value.metadata?.phone_number_id || null;
+          const displayPhoneNumber = value.metadata?.display_phone_number || null;
+
           const messages = value.messages || [];
           if (!Array.isArray(messages) || messages.length === 0) {
             continue;
@@ -170,7 +172,7 @@ Deno.serve(async (req) => {
 
             if (!waMessageId || !fromRaw) continue;
 
-            // Extrai o conteúdo da mensagem de acordo com o tipo
+            // Extração do conteúdo
             let corpoTexto = '';
             if (msg.type === 'text') {
               corpoTexto = msg.text?.body || '';
@@ -197,11 +199,11 @@ Deno.serve(async (req) => {
               corpoTexto = '[Mensagem recebida]';
             }
 
-            // Descobre o nome do contato enviado pela Meta
+            // Contato enviado pela Meta
             const contactName =
               contacts.find((c: any) => c.wa_id === fromRaw)?.profile?.name || null;
 
-            // Idempotência: Verifica se a mensagem já foi salva anteriormente
+            // Idempotência: Se wa_message_id já foi persistido, ignora sem duplicar
             const { data: existingMsg } = await supabaseAdmin
               .from('mensagens_whatsapp')
               .select('id')
@@ -209,112 +211,136 @@ Deno.serve(async (req) => {
               .maybeSingle();
 
             if (existingMsg) {
-              console.log('[whatsapp-webhook] Mensagem duplicada ignorada (idempotência):', waMessageId);
+              console.log('[whatsapp-webhook] Mensagem já registrada (idempotência):', waMessageId);
               continue;
             }
 
-            // Limpa o número de telefone recebido
             const cleanFrom = cleanPhoneNumber(fromRaw);
 
             // =========================================================================
-            // Descoberta do Dono (Prestador)
+            // ROTEAMENTO MULTI-TENANT SEGURO (Baseado em phone_number_id)
             // =========================================================================
             let ownerUserId: string | null = null;
-            let ownerClienteNome: string | null = null;
-            let ownerOrcamentoId: string | null = null;
 
-            // Tentativa 1: Via RPC no PostgreSQL
-            try {
-              const { data: rpcOwner, error: rpcErr } = await supabaseAdmin.rpc(
-                'find_whatsapp_message_owner',
-                { p_clean_phone: cleanFrom }
-              );
+            if (phoneNumberId) {
+              const { data: conn } = await supabaseAdmin
+                .from('whatsapp_connections')
+                .select('user_id, status')
+                .eq('phone_number_id', phoneNumberId)
+                .eq('status', 'active')
+                .maybeSingle();
 
-              if (!rpcErr && Array.isArray(rpcOwner) && rpcOwner.length > 0) {
-                ownerUserId = rpcOwner[0].user_id;
-                ownerClienteNome = rpcOwner[0].cliente_nome;
-                ownerOrcamentoId = rpcOwner[0].orcamento_id;
-              }
-            } catch (rpcEx) {
-              console.warn('[whatsapp-webhook] Falha no RPC find_whatsapp_message_owner, usando fallback:', rpcEx);
-            }
-
-            // Tentativa 2 (Fallback): Consulta direta em orçamentos e clientes
-            if (!ownerUserId) {
-              const digitsOnly = cleanFrom.replace(/\D/g, '');
-              const lastDigits = digitsOnly.length >= 8 ? digitsOnly.slice(-8) : digitsOnly;
-
-              // Busca em orçamentos primeiro
-              const { data: orcamentosMatches } = await supabaseAdmin
-                .from('orcamentos')
-                .select('id, user_id, cliente_nome, cliente_telefone, created_at')
-                .ilike('cliente_telefone', `%${lastDigits}%`)
-                .order('created_at', { ascending: false })
-                .limit(5);
-
-              // Busca em clientes
-              const { data: clientesMatches } = await supabaseAdmin
-                .from('clientes')
-                .select('id, user_id, nome, telefone, created_at')
-                .ilike('telefone', `%${lastDigits}%`)
-                .order('created_at', { ascending: false })
-                .limit(5);
-
-              const allCandidates: Array<{
-                user_id: string;
-                cliente_nome: string;
-                orcamento_id: string | null;
-                created_at: string;
-              }> = [];
-
-              if (orcamentosMatches) {
-                for (const o of orcamentosMatches) {
-                  allCandidates.push({
-                    user_id: o.user_id,
-                    cliente_nome: o.cliente_nome,
-                    orcamento_id: o.id,
-                    created_at: o.created_at,
-                  });
-                }
-              }
-
-              if (clientesMatches) {
-                for (const c of clientesMatches) {
-                  allCandidates.push({
-                    user_id: c.user_id,
-                    cliente_nome: c.nome,
-                    orcamento_id: null,
-                    created_at: c.created_at,
-                  });
-                }
-              }
-
-              // Ordena pelo mais recente
-              allCandidates.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-              if (allCandidates.length > 0) {
-                ownerUserId = allCandidates[0].user_id;
-                ownerClienteNome = allCandidates[0].cliente_nome;
-                ownerOrcamentoId = allCandidates[0].orcamento_id;
+              if (conn?.user_id) {
+                ownerUserId = conn.user_id;
               }
             }
 
-            // Se nenhum dono foi encontrado, registra aviso e descarta sem ruído
+            // Fallback de compatibilidade temporária exclusivamente se houver apenas 1 conexão central
+            if (!ownerUserId && phoneNumberId) {
+              const centralPhoneId = Deno.env.get('PHONE_NUMBER_ID');
+              if (centralPhoneId && centralPhoneId === phoneNumberId) {
+                // Se o servidor opera em modo central e houver apenas 1 perfil TURBO cadastrado
+                const { data: turboProfiles } = await supabaseAdmin
+                  .from('profiles')
+                  .select('id')
+                  .eq('plano', 'TURBO')
+                  .limit(2);
+
+                if (turboProfiles && turboProfiles.length === 1) {
+                  ownerUserId = turboProfiles[0].id;
+                }
+              }
+            }
+
+            // Se NÃO foi possível determinar o tenant com segurança absoluta:
+            // NUNCA adivinhar pelo telefone do cliente. Descarta com log técnico.
             if (!ownerUserId) {
               console.warn(
-                `[whatsapp-webhook] Nenhum prestador (dono) encontrado para a mensagem recebida de: ${fromRaw} (${cleanFrom}). Mensagem descartada.`
+                `[whatsapp-webhook] Tenant não identificado para phone_number_id="${phoneNumberId}". Mensagem descartada por segurança.`
               );
               continue;
             }
 
-            // Insere na tabela public.mensagens_whatsapp com service_role
+            // Busca orçamento e cliente vinculados exclusivamente para o ownerUserId autenticado
+            const digitsOnly = cleanFrom.replace(/\D/g, '');
+            const lastDigits = digitsOnly.length >= 8 ? digitsOnly.slice(-8) : digitsOnly;
+
+            let ownerClienteNome: string | null = null;
+            let ownerOrcamentoId: string | null = null;
+            let matchedClienteId: string | null = null;
+
+            // Busca orçamentos deste prestador específico
+            const { data: orcMatch } = await supabaseAdmin
+              .from('orcamentos')
+              .select('id, cliente_nome, cliente_id')
+              .eq('user_id', ownerUserId)
+              .ilike('cliente_telefone', `%${lastDigits}%`)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (orcMatch) {
+              ownerOrcamentoId = orcMatch.id;
+              ownerClienteNome = orcMatch.cliente_nome;
+              matchedClienteId = orcMatch.cliente_id;
+            }
+
+            // Busca cliente cadastrado no banco deste prestador específico
+            if (!matchedClienteId) {
+              const { data: cliMatch } = await supabaseAdmin
+                .from('clientes')
+                .select('id, nome')
+                .eq('user_id', ownerUserId)
+                .ilike('telefone', `%${lastDigits}%`)
+                .limit(1)
+                .maybeSingle();
+
+              if (cliMatch) {
+                matchedClienteId = cliMatch.id;
+                if (!ownerClienteNome) ownerClienteNome = cliMatch.nome;
+              }
+            }
+
+            // =========================================================================
+            // Tratamento de Opt-in / Opt-out e Última Interação
+            // =========================================================================
+            const normalizedCorpo = corpoTexto.trim().toUpperCase();
+            const isOptOut = OPT_OUT_KEYWORDS.includes(normalizedCorpo);
+
+            if (matchedClienteId) {
+              if (isOptOut) {
+                console.log(`[whatsapp-webhook] Solicitação de descadastro (opt-out) detectada do cliente ${matchedClienteId}`);
+                await supabaseAdmin
+                  .from('clientes')
+                  .update({
+                    whatsapp_opt_in: false,
+                    whatsapp_opt_out_at: new Date().toISOString(),
+                    last_inbound_at: new Date().toISOString(),
+                  })
+                  .eq('id', matchedClienteId)
+                  .eq('user_id', ownerUserId);
+              } else {
+                await supabaseAdmin
+                  .from('clientes')
+                  .update({
+                    last_inbound_at: new Date().toISOString(),
+                  })
+                  .eq('id', matchedClienteId)
+                  .eq('user_id', ownerUserId);
+              }
+            }
+
+            // Gravação segura na tabela public.mensagens_whatsapp com RLS service_role
             const nomeFinal = contactName || ownerClienteNome || 'Cliente WhatsApp';
 
             const { error: insertErr } = await supabaseAdmin.from('mensagens_whatsapp').insert({
               user_id: ownerUserId,
+              phone_number_id: phoneNumberId,
               cliente_telefone: cleanFrom,
               cliente_nome: nomeFinal,
               corpo: corpoTexto,
+              direcao: 'inbound',
+              status: 'delivered',
               lida: false,
               wa_message_id: waMessageId,
               orcamento_id: ownerOrcamentoId,
@@ -324,9 +350,6 @@ Deno.serve(async (req) => {
               console.error('[whatsapp-webhook] Erro ao gravar mensagem no banco:', insertErr);
             } else {
               processedCount++;
-              console.log(
-                `[whatsapp-webhook] Mensagem ${waMessageId} gravada com sucesso para o prestador ${ownerUserId}.`
-              );
             }
           }
         }
@@ -338,9 +361,8 @@ Deno.serve(async (req) => {
       );
     } catch (err: any) {
       console.error('[whatsapp-webhook Exception]:', err);
-      // Sempre responde 200 para a Meta não suspender o webhook
       return new Response(
-        JSON.stringify({ success: false, error: err?.message || 'Internal parsing error' }),
+        JSON.stringify({ success: false, error: 'Internal processing error' }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }

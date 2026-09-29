@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 3. Tabela de Clientes
+-- 3. Tabela de Clientes (com suporte a Opt-in/Opt-out de WhatsApp e última interação)
 CREATE TABLE IF NOT EXISTS public.clientes (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -34,6 +34,11 @@ CREATE TABLE IF NOT EXISTS public.clientes (
   cidade TEXT,
   endereco TEXT,
   observacoes TEXT,
+  whatsapp_opt_in BOOLEAN NOT NULL DEFAULT true,
+  whatsapp_opt_in_at TIMESTAMPTZ DEFAULT NOW(),
+  whatsapp_opt_in_source TEXT DEFAULT 'cadastro',
+  whatsapp_opt_out_at TIMESTAMPTZ,
+  last_inbound_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -92,13 +97,28 @@ CREATE TABLE IF NOT EXISTS public.configuracoes (
   CONSTRAINT uq_configuracoes_user_id UNIQUE (user_id)
 );
 
--- 7. Tabela de Mensagens Recebidas via WhatsApp (Exclusivo para Plano TURBO)
+-- 7. Tabela de Conexões WhatsApp por Usuário (Multi-Tenant)
+CREATE TABLE IF NOT EXISTS public.whatsapp_connections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  waba_id TEXT,
+  phone_number_id TEXT NOT NULL,
+  display_phone_number TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'revoked')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 8. Tabela de Mensagens do WhatsApp (Inbound e Outbound - Multi-Tenant)
 CREATE TABLE IF NOT EXISTS public.mensagens_whatsapp (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  phone_number_id TEXT,
   cliente_telefone TEXT NOT NULL,
   cliente_nome TEXT,
   corpo TEXT NOT NULL,
+  direcao TEXT NOT NULL DEFAULT 'inbound' CHECK (direcao IN ('inbound', 'outbound')),
+  status TEXT NOT NULL DEFAULT 'delivered' CHECK (status IN ('pending', 'sent', 'delivered', 'read', 'failed')),
   lida BOOLEAN NOT NULL DEFAULT false,
   wa_message_id TEXT UNIQUE,
   orcamento_id TEXT REFERENCES public.orcamentos(id) ON DELETE SET NULL,
@@ -108,13 +128,22 @@ CREATE TABLE IF NOT EXISTS public.mensagens_whatsapp (
 -- Índices de Performance
 CREATE INDEX IF NOT EXISTS idx_profiles_plano ON public.profiles(plano);
 CREATE INDEX IF NOT EXISTS idx_clientes_user_id ON public.clientes(user_id);
+CREATE INDEX IF NOT EXISTS idx_clientes_user_opt_in ON public.clientes(user_id, whatsapp_opt_in);
+CREATE INDEX IF NOT EXISTS idx_clientes_last_inbound ON public.clientes(user_id, last_inbound_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orcamentos_user_id ON public.orcamentos(user_id);
 CREATE INDEX IF NOT EXISTS idx_orcamentos_status ON public.orcamentos(status);
 CREATE INDEX IF NOT EXISTS idx_orcamentos_user_status ON public.orcamentos(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_ai_usage_user_mes ON public.ai_usage(user_id, mes_referencia);
 CREATE INDEX IF NOT EXISTS idx_configuracoes_user_id ON public.configuracoes(user_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_conn_user_id ON public.whatsapp_connections(user_id);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_conn_phone_number_id ON public.whatsapp_connections(phone_number_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_conn_unique_active_phone
+  ON public.whatsapp_connections(phone_number_id)
+  WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_mensagens_whatsapp_user_lida ON public.mensagens_whatsapp(user_id, lida);
+CREATE INDEX IF NOT EXISTS idx_mensagens_whatsapp_user_created ON public.mensagens_whatsapp(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mensagens_whatsapp_cliente_telefone ON public.mensagens_whatsapp(cliente_telefone);
+CREATE INDEX IF NOT EXISTS idx_mensagens_whatsapp_phone_number_id ON public.mensagens_whatsapp(phone_number_id);
 CREATE INDEX IF NOT EXISTS idx_mensagens_whatsapp_created_at ON public.mensagens_whatsapp(created_at DESC);
 
 -- 7. Trigger Automático para Criar Perfil ao Cadastrar Usuário no Supabase Auth
@@ -527,6 +556,28 @@ CREATE POLICY "Usuário atualiza status lida de suas mensagens"
 REVOKE ALL ON public.mensagens_whatsapp FROM PUBLIC, anon;
 GRANT SELECT, UPDATE (lida) ON public.mensagens_whatsapp TO authenticated;
 GRANT ALL ON public.mensagens_whatsapp TO service_role;
+
+-- 14. Ativação de RLS e Políticas para Conexões WhatsApp (Multi-Tenant)
+ALTER TABLE public.whatsapp_connections ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Usuário visualiza suas próprias conexões" ON public.whatsapp_connections;
+CREATE POLICY "Usuário visualiza suas próprias conexões"
+  ON public.whatsapp_connections FOR SELECT
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Usuário atualiza suas próprias conexões" ON public.whatsapp_connections;
+CREATE POLICY "Usuário atualiza suas próprias conexões"
+  ON public.whatsapp_connections FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Usuário exclui suas próprias conexões" ON public.whatsapp_connections;
+CREATE POLICY "Usuário exclui suas próprias conexões"
+  ON public.whatsapp_connections FOR DELETE
+  USING (auth.uid() = user_id);
+
+GRANT SELECT, UPDATE, DELETE ON public.whatsapp_connections TO authenticated;
+GRANT ALL ON public.whatsapp_connections TO service_role;
 
 -- 14. Função Auxiliar: Descoberta do Prestador (Dono) de Mensagem Inbound
 -- Compara o telefone recebido com 'cliente_telefone' em orcamentos ou 'telefone' em clientes.

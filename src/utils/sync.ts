@@ -101,6 +101,11 @@ export function mapDbToCliente(row: any): Cliente {
     dataCadastro: row.created_at ? String(row.created_at).slice(0, 10) : new Date().toISOString().slice(0, 10),
     totalOrcamentos: 0,
     valorTotalGasto: 0,
+    whatsappOptIn: row.whatsapp_opt_in !== undefined ? Boolean(row.whatsapp_opt_in) : true,
+    whatsappOptInAt: row.whatsapp_opt_in_at || undefined,
+    whatsappOptInSource: row.whatsapp_opt_in_source || undefined,
+    whatsappOptOutAt: row.whatsapp_opt_out_at || undefined,
+    lastInboundAt: row.last_inbound_at || undefined,
   };
 }
 
@@ -115,6 +120,11 @@ export function mapClienteToDb(cli: Cliente, userId: string): Record<string, any
     cidade: cli.cidade || null,
     endereco: cli.endereco || null,
     observacoes: cli.observacoes || null,
+    whatsapp_opt_in: cli.whatsappOptIn !== undefined ? cli.whatsappOptIn : true,
+    whatsapp_opt_in_at: cli.whatsappOptInAt || null,
+    whatsapp_opt_in_source: cli.whatsappOptInSource || 'cadastro',
+    whatsapp_opt_out_at: cli.whatsappOptOutAt || null,
+    last_inbound_at: cli.lastInboundAt || null,
     updated_at: new Date().toISOString(),
   };
 }

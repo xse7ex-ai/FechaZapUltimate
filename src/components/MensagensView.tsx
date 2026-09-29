@@ -311,7 +311,16 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
                         <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
                           {msg.clienteNome || 'Cliente WhatsApp'}
                         </span>
-                        {!msg.lida && (
+                        {msg.direcao === 'outbound' ? (
+                          <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
+                            Enviada
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                            Recebida
+                          </span>
+                        )}
+                        {!msg.lida && msg.direcao !== 'outbound' && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500 text-white uppercase tracking-wider">
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                             Nova

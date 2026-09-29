@@ -147,10 +147,10 @@ export async function gerarOrcamentoComIA(
         id: String(Date.now() + idx),
         descricao: String(it.descricao || 'Item'),
         quantidade: Number(it.quantidade) || 1,
-        valorUnitario: Number(it.valorUnitario) || 0,
-        total: (Number(it.quantidade) || 1) * (Number(it.valorUnitario) || 0),
+        valorUnitario: typeof it.valorUnitario === 'number' && it.valorUnitario > 0 ? Number(it.valorUnitario) : 0,
+        total: (Number(it.quantidade) || 1) * (typeof it.valorUnitario === 'number' && it.valorUnitario > 0 ? Number(it.valorUnitario) : 0),
       }))
-    : [{ id: '1', descricao: textoOuVoz.slice(0, 80), quantidade: 1, valorUnitario: 100, total: 100 }];
+    : [{ id: '1', descricao: textoOuVoz.slice(0, 80), quantidade: 1, valorUnitario: 0, total: 0 }];
 
   const subtotal = itensFormatados.reduce((acc, it) => acc + it.total, 0);
 

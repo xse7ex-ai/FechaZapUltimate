@@ -40,6 +40,11 @@ export interface Cliente {
   dataCadastro: string;
   totalOrcamentos?: number;
   valorTotalGasto?: number;
+  whatsappOptIn?: boolean;
+  whatsappOptInAt?: string;
+  whatsappOptInSource?: string;
+  whatsappOptOutAt?: string;
+  lastInboundAt?: string;
 }
 
 export interface ConfiguracaoEmpresa {
@@ -86,13 +91,27 @@ export interface GatilhoIA {
 export interface MensagemWhatsApp {
   id: string;
   userId: string;
+  phoneNumberId?: string;
   clienteTelefone: string;
   clienteNome?: string;
   corpo: string;
+  direcao?: 'inbound' | 'outbound';
+  status?: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
   lida: boolean;
   waMessageId?: string;
   orcamentoId?: string;
   createdAt: string;
+}
+
+export interface WhatsAppConnection {
+  id: string;
+  userId: string;
+  wabaId?: string;
+  phoneNumberId: string;
+  displayPhoneNumber?: string;
+  status: 'active' | 'inactive' | 'revoked';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type ActiveTab = 'dashboard' | 'orcamentos' | 'clientes' | 'relatorios' | 'ia' | 'mensagens';

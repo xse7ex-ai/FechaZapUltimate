@@ -93,6 +93,11 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
         : new Date().toISOString().split('T')[0],
       totalOrcamentos: editingCliente?.totalOrcamentos || 0,
       valorTotalGasto: editingCliente?.valorTotalGasto || 0,
+      whatsappOptIn: editingCliente?.whatsappOptIn !== undefined ? editingCliente.whatsappOptIn : true,
+      whatsappOptInAt: editingCliente?.whatsappOptInAt || new Date().toISOString(),
+      whatsappOptInSource: editingCliente?.whatsappOptInSource || 'cadastro',
+      whatsappOptOutAt: editingCliente?.whatsappOptOutAt,
+      lastInboundAt: editingCliente?.lastInboundAt,
     };
 
     onSaveCliente(cliente);

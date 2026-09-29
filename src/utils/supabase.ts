@@ -286,9 +286,12 @@ export async function fetchMensagensWhatsApp(userId?: string | null): Promise<Me
     const mapped: MensagemWhatsApp[] = (data || []).map((row: any) => ({
       id: String(row.id),
       userId: String(row.user_id),
+      phoneNumberId: row.phone_number_id || undefined,
       clienteTelefone: row.cliente_telefone,
       clienteNome: row.cliente_nome || undefined,
       corpo: row.corpo,
+      direcao: row.direcao || 'inbound',
+      status: row.status || 'delivered',
       lida: Boolean(row.lida),
       waMessageId: row.wa_message_id || undefined,
       orcamentoId: row.orcamento_id || undefined,
