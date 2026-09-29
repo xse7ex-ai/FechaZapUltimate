@@ -3,6 +3,7 @@ import { Plus, Settings, Bell } from 'lucide-react';
 import { ConfiguracaoEmpresa, Orcamento, TipoPlano } from '../types';
 import { OrcamentoVencimentoInfo } from '../utils/validadeNotifications';
 import { NotificationDropdown } from './NotificationDropdown';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface TopbarProps {
   empresa: ConfiguracaoEmpresa;
@@ -120,6 +121,9 @@ export const Topbar: React.FC<TopbarProps> = ({
               onShowToast={onShowToast}
             />
           </div>
+
+          {/* Botão PWA (Instalar App - visível quando instalável ou iOS) */}
+          <PWAInstallButton variant="topbar" />
 
           {/* 3. BOTÃO NOVO (Ação Primária Compacta e Destacada) */}
           <button

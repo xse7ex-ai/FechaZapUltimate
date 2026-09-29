@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="50%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#0d9488" />
+    </linearGradient>
+    <linearGradient id="boltGradMask" x1="0%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#fef08a" />
+    </linearGradient>
+    <filter id="shadowMask" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#022c22" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Full-bleed background without border radius for maskable canvas -->
+  <rect width="512" height="512" fill="url(#bgGradMask)" />
+
+  <!-- Centered safe-zone group scaled by ~0.76 (padding ~12% on all sides) -->
+  <g transform="translate(61, 61) scale(0.76)">
+    <!-- Central Lightning Bolt (FechaZap ⚡) -->
+    <path
+      d="M285 64 L160 272 L252 272 L215 448 L356 236 L264 236 Z"
+      fill="url(#boltGradMask)"
+      stroke="#ffffff"
+      stroke-width="10"
+      stroke-linejoin="round"
+      stroke-linecap="round"
+      filter="url(#shadowMask)"
+    />
+
+    <!-- WhatsApp / Proposta Aprovada Check Accent -->
+    <circle cx="396" cy="396" r="42" fill="#047857" stroke="#ffffff" stroke-width="7" />
+    <path d="M378 396 L392 410 L416 382" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ActiveTab, ConfiguracaoEmpresa, TipoPlano } from '../types';
 import { useTheme } from '../context/ThemeContext';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -139,6 +140,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Bottom Footer Actions */}
       <div className="mt-auto pt-4 border-t border-slate-800 space-y-1">
+        {/* PWA Install Button (aparece quando instalável ou no iOS) */}
+        <PWAInstallButton variant="sidebar" />
+
         {/* Quick Theme Switcher Button */}
         <button
           onClick={toggleTheme}
