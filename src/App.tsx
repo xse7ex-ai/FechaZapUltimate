@@ -51,49 +51,40 @@ import {
   flushPendingSyncQueue,
 } from './utils/sync';
 import {
+  loadUserOrcamentos,
+  saveUserOrcamentos,
+  loadUserClientes,
+  saveUserClientes,
+  loadUserEmpresa,
+  saveUserEmpresa,
+  loadUserMensagens,
+  saveUserMensagens,
+  checkLegacyData,
+  migrateLegacyDataToUser,
+  dismissLegacyData,
+} from './utils/storage';
+import {
   getOrcamentosProximosValidade,
   dispararNotificacaoNativa,
   OrcamentoVencimentoInfo,
 } from './utils/validadeNotifications';
+import { getCachedUserId } from './utils/supabase';
 
 export default function App() {
-  // State with LocalStorage Persistence
-  const [orcamentos, setOrcamentos] = useState<Orcamento[]>(() => {
-    try {
-      const saved = localStorage.getItem('fechazap_orcamentos_v3');
-      if (saved) {
-        const parsed: Orcamento[] = JSON.parse(saved);
-        const missingInitial = INITIAL_ORCAMENTOS.filter(
-          (init) => !parsed.some((p) => p.id === init.id)
-        );
-        if (missingInitial.length > 0) {
-          return [...parsed, ...missingInitial];
-        }
-        return parsed;
-      }
-      return INITIAL_ORCAMENTOS;
-    } catch {
-      return INITIAL_ORCAMENTOS;
-    }
-  });
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => getCachedUserId());
 
-  const [clientes, setClientes] = useState<Cliente[]>(() => {
-    try {
-      const saved = localStorage.getItem('fechazap_clientes_v3');
-      return saved ? JSON.parse(saved) : INITIAL_CLIENTES;
-    } catch {
-      return INITIAL_CLIENTES;
-    }
-  });
+  // State with LocalStorage Persistence isolada por namespace de usuário
+  const [orcamentos, setOrcamentos] = useState<Orcamento[]>(() =>
+    loadUserOrcamentos(getCachedUserId())
+  );
 
-  const [empresa, setEmpresa] = useState<ConfiguracaoEmpresa>(() => {
-    try {
-      const saved = localStorage.getItem('fechazap_empresa_v3');
-      return saved ? JSON.parse(saved) : INITIAL_EMPRESA_CONFIG;
-    } catch {
-      return INITIAL_EMPRESA_CONFIG;
-    }
-  });
+  const [clientes, setClientes] = useState<Cliente[]>(() =>
+    loadUserClientes(getCachedUserId())
+  );
+
+  const [empresa, setEmpresa] = useState<ConfiguracaoEmpresa>(() =>
+    loadUserEmpresa(getCachedUserId())
+  );
 
   // Navigation & Modals
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
@@ -105,25 +96,60 @@ export default function App() {
   const [isPerfilOpen, setIsPerfilOpen] = useState<boolean>(false);
   const [userPlano, setUserPlano] = useState<TipoPlano>('GRATUITO');
 
-  // WhatsApp Inbound Messages (Caixa de Entrada Exclusiva TURBO)
-  const [mensagens, setMensagens] = useState<MensagemWhatsApp[]>(() => {
-    try {
-      const saved = localStorage.getItem('fechazap_mensagens_whatsapp');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
+  // WhatsApp Inbound Messages isolada no namespace da conta
+  const [mensagens, setMensagens] = useState<MensagemWhatsApp[]>(() =>
+    loadUserMensagens(getCachedUserId())
+  );
+
+  // Detecção e migração controlada de dados legados
+  const [legacyNotice, setLegacyNotice] = useState<{
+    show: boolean;
+    orcamentosCount: number;
+    clientesCount: number;
+  }>({ show: false, orcamentosCount: 0, clientesCount: 0 });
+
+  useEffect(() => {
+    const legacy = checkLegacyData();
+    if (legacy.hasLegacy) {
+      setLegacyNotice({
+        show: true,
+        orcamentosCount: legacy.orcamentosCount,
+        clientesCount: legacy.clientesCount,
+      });
     }
-  });
+  }, []);
+
+  const handleMigrateLegacy = () => {
+    const res = migrateLegacyDataToUser(currentUserId);
+    if (res.success) {
+      setOrcamentos(loadUserOrcamentos(currentUserId));
+      setClientes(loadUserClientes(currentUserId));
+      setEmpresa(loadUserEmpresa(currentUserId));
+      addToast(
+        'Dados importados!',
+        `${res.migratedOrcamentos} orçamentos e ${res.migratedClientes} clientes foram importados com sucesso para esta conta.`,
+        'success'
+      );
+    }
+    setLegacyNotice({ show: false, orcamentosCount: 0, clientesCount: 0 });
+  };
+
+  const handleDismissLegacy = () => {
+    dismissLegacyData();
+    setLegacyNotice({ show: false, orcamentosCount: 0, clientesCount: 0 });
+    addToast('Aviso ignorado', 'Os dados de versões anteriores foram descartados deste dispositivo.', 'info');
+  };
 
   const unreadMensagensCount = useMemo(() => {
     if (userPlano !== 'TURBO') return 0;
     return mensagens.filter((m) => !m.lida).length;
   }, [mensagens, userPlano]);
 
-  const loadMensagens = async () => {
-    if (userPlano === 'TURBO') {
+  const loadMensagens = async (targetUserId?: string | null) => {
+    const activeId = targetUserId !== undefined ? targetUserId : currentUserId;
+    if (userPlano === 'TURBO' && activeId) {
       try {
-        const msgs = await fetchMensagensWhatsApp();
+        const msgs = await fetchMensagensWhatsApp(activeId);
         setMensagens(msgs);
       } catch (err) {
         console.warn('Erro ao carregar mensagens:', err);
@@ -135,7 +161,7 @@ export default function App() {
     setMensagens((prev) =>
       prev.map((m) => (m.id === id ? { ...m, lida: true } : m))
     );
-    await markMensagemAsRead(id);
+    await markMensagemAsRead(id, currentUserId);
   };
 
   // Selected items
@@ -147,54 +173,60 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [geminiOnline, setGeminiOnline] = useState<boolean>(true);
 
-  // Save to LocalStorage
+  // Gravações estritamente no namespace do usuário ativo
   useEffect(() => {
-    localStorage.setItem('fechazap_orcamentos_v3', JSON.stringify(orcamentos));
-  }, [orcamentos]);
+    saveUserOrcamentos(currentUserId, orcamentos);
+  }, [orcamentos, currentUserId]);
 
   useEffect(() => {
-    localStorage.setItem('fechazap_clientes_v3', JSON.stringify(clientes));
-  }, [clientes]);
+    saveUserClientes(currentUserId, clientes);
+  }, [clientes, currentUserId]);
 
   useEffect(() => {
-    localStorage.setItem('fechazap_empresa_v3', JSON.stringify(empresa));
-  }, [empresa]);
+    saveUserEmpresa(currentUserId, empresa);
+  }, [empresa, currentUserId]);
 
-  const syncWithCloud = async (plano: TipoPlano) => {
+  useEffect(() => {
+    saveUserMensagens(currentUserId, mensagens);
+  }, [mensagens, currentUserId]);
+
+  const syncWithCloud = async (plano: TipoPlano, targetUserId?: string | null) => {
     if (!isCloudSyncEnabled(plano)) return;
+    const effectiveUserId = targetUserId || currentUserId;
+    if (!effectiveUserId) return; // Não sincroniza dados anônimos
+
     try {
-      // 1. Processa fila pendente offline se houver
-      await flushPendingSyncQueue(plano);
+      // 1. Processa fila pendente offline do próprio usuário
+      await flushPendingSyncQueue(plano, effectiveUserId);
 
       // 2. Busca dados atualizados da nuvem no Supabase
       const cloud = await fetchCloudData(plano);
       if (cloud) {
         if (cloud.orcamentos.length > 0 || cloud.clientes.length > 0) {
-          // Servidor possui dados: mescla preservando criações locais offline
+          // Servidor possui dados: mescla preservando criações locais offline pertencentes a este usuário
           setOrcamentos((prev) => {
             const cloudIds = new Set(cloud.orcamentos.map((c) => c.id));
             const localOnly = prev.filter((p) => !cloudIds.has(p.id));
-            // Sincroniza em segundo plano os itens que existiam apenas localmente
-            localOnly.forEach((o) => syncSaveOrcamento(o, plano));
-            return [...cloud.orcamentos, ...localOnly];
+            localOnly.forEach((o) => syncSaveOrcamento(o, plano, effectiveUserId));
+            const merged = [...cloud.orcamentos, ...localOnly];
+            saveUserOrcamentos(effectiveUserId, merged);
+            return merged;
           });
 
           setClientes((prev) => {
             const cloudIds = new Set(cloud.clientes.map((c) => c.id));
             const localOnly = prev.filter((p) => !cloudIds.has(p.id));
-            localOnly.forEach((c) => syncSaveCliente(c, plano));
-            return [...cloud.clientes, ...localOnly];
+            localOnly.forEach((c) => syncSaveCliente(c, plano, effectiveUserId));
+            const merged = [...cloud.clientes, ...localOnly];
+            saveUserClientes(effectiveUserId, merged);
+            return merged;
           });
         } else {
-          // Servidor ainda vazio (primeiro acesso PRO/TURBO): sobe dados locais do usuário para a nuvem
-          setOrcamentos((currentOrcamentos) => {
-            currentOrcamentos.forEach((o) => syncSaveOrcamento(o, plano));
-            return currentOrcamentos;
-          });
-          setClientes((currentClientes) => {
-            currentClientes.forEach((c) => syncSaveCliente(c, plano));
-            return currentClientes;
-          });
+          // Nuvem vazia: sobe dados do namespace deste usuário
+          const userLocalOrcamentos = loadUserOrcamentos(effectiveUserId);
+          const userLocalClientes = loadUserClientes(effectiveUserId);
+          userLocalOrcamentos.forEach((o) => syncSaveOrcamento(o, plano, effectiveUserId));
+          userLocalClientes.forEach((c) => syncSaveCliente(c, plano, effectiveUserId));
         }
       }
     } catch (err) {
@@ -202,20 +234,44 @@ export default function App() {
     }
   };
 
-  const loadUserProfile = () => {
-    fetchServerUserProfileAndQuota()
-      .then((data) => {
-        setUserPlano(data.user.plano);
-        if (isCloudSyncEnabled(data.user.plano)) {
-          syncWithCloud(data.user.plano);
-        }
-        if (data.user.plano === 'TURBO') {
-          fetchMensagensWhatsApp().then(setMensagens).catch(() => {});
-        }
-      })
-      .catch(() => {
-        setUserPlano('GRATUITO');
-      });
+  const loadUserProfile = async () => {
+    try {
+      const data = await fetchServerUserProfileAndQuota();
+      const newUserId = data.authenticated && data.user ? data.user.id : null;
+      setCurrentUserId(newUserId);
+      setUserPlano(data.user.plano);
+
+      // Carrega os dados EXCLUSIVAMENTE do namespace do novo usuário
+      const userOrcamentos = loadUserOrcamentos(newUserId);
+      const userClientes = loadUserClientes(newUserId);
+      const userEmpresa = loadUserEmpresa(newUserId);
+      const userMensagens = loadUserMensagens(newUserId);
+
+      setOrcamentos(userOrcamentos);
+      setClientes(userClientes);
+      setEmpresa(userEmpresa);
+      setMensagens(userMensagens);
+
+      setSelectedOrcamento(null);
+      setOrcamentoToEdit(null);
+
+      if (isCloudSyncEnabled(data.user.plano) && newUserId) {
+        await syncWithCloud(data.user.plano, newUserId);
+      }
+      if (data.user.plano === 'TURBO' && newUserId) {
+        fetchMensagensWhatsApp(newUserId).then(setMensagens).catch(() => {});
+      }
+    } catch {
+      // Visitante ou logout
+      setCurrentUserId(null);
+      setUserPlano('GRATUITO');
+      setOrcamentos(loadUserOrcamentos(null));
+      setClientes(loadUserClientes(null));
+      setEmpresa(loadUserEmpresa(null));
+      setMensagens([]);
+      setSelectedOrcamento(null);
+      setOrcamentoToEdit(null);
+    }
   };
 
   useEffect(() => {
@@ -337,7 +393,7 @@ export default function App() {
       const updatedList = prev.map((o) => (o.id === orcamentoId ? { ...o, status: newStatus } : o));
       const target = updatedList.find((o) => o.id === orcamentoId);
       if (target && isCloudSyncEnabled(userPlano)) {
-        syncSaveOrcamento(target, userPlano);
+        syncSaveOrcamento(target, userPlano, currentUserId);
       }
       return updatedList;
     });
@@ -372,7 +428,7 @@ export default function App() {
     if (newCliente) {
       setClientes((prev) => [newCliente, ...prev]);
       if (isCloudSyncEnabled(userPlano)) {
-        syncSaveCliente(newCliente, userPlano);
+        syncSaveCliente(newCliente, userPlano, currentUserId);
       }
     }
 
@@ -386,7 +442,21 @@ export default function App() {
 
     // Gravação na nuvem Supabase (PRO e TURBO)
     if (isCloudSyncEnabled(userPlano)) {
-      syncSaveOrcamento(savedOrcamento, userPlano);
+      syncSaveOrcamento(savedOrcamento, userPlano, currentUserId).then((res) => {
+        if (!res.success && res.errorCode === 'QUOTA_EXCEEDED') {
+          addToast(
+            'Limite de Orçamentos Atingido',
+            res.errorMessage ||
+              'Você atingiu o limite de 5 orçamentos deste mês. Faça upgrade para continuar criando novos orçamentos.',
+            'error',
+            {
+              label: 'Ver Planos',
+              onClick: () => setIsPerfilOpen(true),
+            }
+          );
+          setIsPerfilOpen(true);
+        }
+      });
     }
 
     addToast(
@@ -400,13 +470,33 @@ export default function App() {
   const handleDeleteOrcamento = (orcamentoId: string) => {
     setOrcamentos((prev) => prev.filter((o) => o.id !== orcamentoId));
     if (isCloudSyncEnabled(userPlano)) {
-      syncDeleteOrcamento(orcamentoId, userPlano);
+      syncDeleteOrcamento(orcamentoId, userPlano, currentUserId);
     }
     addToast('Orçamento Excluído', 'O orçamento foi removido.', 'info');
   };
 
   // Duplicate quote
   const handleDuplicateOrcamento = (orc: Orcamento) => {
+    const mesAtual = new Date().toISOString().slice(0, 7);
+    const orcamentosMes = orcamentos.filter(
+      (o) => o.dataCriacao && o.dataCriacao.startsWith(mesAtual)
+    );
+
+    // Validação preventiva de quota para duplicação no plano GRATUITO
+    if (userPlano === 'GRATUITO' && orcamentosMes.length >= 5) {
+      addToast(
+        'Limite de Orçamentos Atingido',
+        'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados e sincronizar na nuvem.',
+        'error',
+        {
+          label: 'Ver Planos',
+          onClick: () => setIsPerfilOpen(true),
+        }
+      );
+      setIsPerfilOpen(true);
+      return;
+    }
+
     const nextNum = String(Number(orc.numero || 100) + 1);
     const duplicated: Orcamento = {
       ...orc,
@@ -417,7 +507,21 @@ export default function App() {
     };
     setOrcamentos((prev) => [duplicated, ...prev]);
     if (isCloudSyncEnabled(userPlano)) {
-      syncSaveOrcamento(duplicated, userPlano);
+      syncSaveOrcamento(duplicated, userPlano, currentUserId).then((res) => {
+        if (!res.success && res.errorCode === 'QUOTA_EXCEEDED') {
+          addToast(
+            'Limite de Orçamentos Atingido',
+            res.errorMessage ||
+              'Você atingiu o limite de 5 orçamentos deste mês. Faça upgrade para continuar criando novos orçamentos.',
+            'error',
+            {
+              label: 'Ver Planos',
+              onClick: () => setIsPerfilOpen(true),
+            }
+          );
+          setIsPerfilOpen(true);
+        }
+      });
     }
     addToast(
       'Orçamento Duplicado!',
@@ -436,7 +540,7 @@ export default function App() {
       return [cliente, ...prev];
     });
     if (isCloudSyncEnabled(userPlano)) {
-      syncSaveCliente(cliente, userPlano);
+      syncSaveCliente(cliente, userPlano, currentUserId);
     }
   };
 
@@ -444,7 +548,7 @@ export default function App() {
   const handleDeleteCliente = (clienteId: string) => {
     setClientes((prev) => prev.filter((c) => c.id !== clienteId));
     if (isCloudSyncEnabled(userPlano)) {
-      syncDeleteCliente(clienteId, userPlano);
+      syncDeleteCliente(clienteId, userPlano, currentUserId);
     }
     addToast('Cliente Excluído', 'O cadastro do cliente foi removido.', 'info');
   };
@@ -508,6 +612,34 @@ export default function App() {
         onOpenIAForOrcamento={handleOpenIAForOrcamento}
         onVerOrcamentos={() => setActiveTab('orcamentos')}
       />
+
+      {/* Banner de Migração Explícita de Dados Legados (se detectados de versões anteriores) */}
+      {legacyNotice.show && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800/60 px-4 py-3">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-amber-900 dark:text-amber-200">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">Versão anterior detectada:</span>
+              <span>
+                Encontramos {legacyNotice.orcamentosCount} orçamentos e {legacyNotice.clientesCount} clientes gravados localmente em versão anterior. Deseja importá-los para sua conta atual?
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleMigrateLegacy}
+                className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition shadow-sm"
+              >
+                Importar para esta conta
+              </button>
+              <button
+                onClick={handleDismissLegacy}
+                className="px-3 py-1 bg-transparent hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 text-xs rounded-lg transition"
+              >
+                Descartar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 flex max-w-7xl w-full mx-auto">
         {/* Desktop Sidebar */}

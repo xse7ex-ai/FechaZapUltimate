@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { UserProfile, UserQuota, TipoPlano, MensagemWhatsApp } from '../types';
+import { loadUserMensagens, saveUserMensagens } from './storage';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -17,6 +18,19 @@ if (supabaseUrl && supabaseAnonKey) {
   } catch (err) {
     console.warn('Erro ao inicializar Supabase client:', err);
   }
+}
+
+export function getCachedUserId(): string | null {
+  try {
+    const raw = localStorage.getItem('fechazap_auth_user');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return typeof parsed.id === 'string' && parsed.id ? parsed.id : null;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
 }
 
 export function getSupabase(): SupabaseClient | null {
@@ -163,8 +177,9 @@ export async function loginWithEmail(email: string, password: string): Promise<{
     // Modo simulação local/offline demonstrativo
     if (email && password) {
       const mockToken = `local-jwt-${Date.now()}`;
+      const mockId = `mock-user-${Date.now()}`;
       localStorage.setItem('fechazap_auth_token', mockToken);
-      localStorage.setItem('fechazap_auth_user', JSON.stringify({ email, plano: 'GRATUITO' }));
+      localStorage.setItem('fechazap_auth_user', JSON.stringify({ id: mockId, email, plano: 'GRATUITO' }));
       return { success: true };
     }
     return { success: false, error: 'Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.' };
@@ -173,8 +188,16 @@ export async function loginWithEmail(email: string, password: string): Promise<{
   try {
     const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error) return { success: false, error: error.message };
-    if (data.session?.access_token) {
+    if (data.session?.access_token && data.user) {
       localStorage.setItem('fechazap_auth_token', data.session.access_token);
+      localStorage.setItem(
+        'fechazap_auth_user',
+        JSON.stringify({
+          id: data.user.id,
+          email: data.user.email,
+          nome: data.user.user_metadata?.nome || '',
+        })
+      );
     }
     return { success: true };
   } catch (err: any) {
@@ -186,8 +209,9 @@ export async function loginWithEmail(email: string, password: string): Promise<{
 export async function registerWithEmail(email: string, password: string, nome?: string): Promise<{ success: boolean; error?: string }> {
   if (!client) {
     const mockToken = `local-jwt-${Date.now()}`;
+    const mockId = `mock-user-${Date.now()}`;
     localStorage.setItem('fechazap_auth_token', mockToken);
-    localStorage.setItem('fechazap_auth_user', JSON.stringify({ email, nome, plano: 'GRATUITO' }));
+    localStorage.setItem('fechazap_auth_user', JSON.stringify({ id: mockId, email, nome, plano: 'GRATUITO' }));
     return { success: true };
   }
 
@@ -203,8 +227,17 @@ export async function registerWithEmail(email: string, password: string, nome?: 
       },
     });
     if (error) return { success: false, error: error.message };
-    if (data.session?.access_token) {
+    if (data.session?.access_token && data.user) {
       localStorage.setItem('fechazap_auth_token', data.session.access_token);
+      localStorage.setItem(
+        'fechazap_auth_user',
+        JSON.stringify({
+          id: data.user.id,
+          email: data.user.email,
+          nome: data.user.user_metadata?.nome || nome || '',
+          plano: 'GRATUITO',
+        })
+      );
     }
     return { success: true };
   } catch (err: any) {
@@ -226,23 +259,18 @@ export async function logoutUser(): Promise<void> {
 
 /**
  * Busca as mensagens recebidas via WhatsApp na tabela public.mensagens_whatsapp
- * Exclusivo para usuários no plano TURBO.
+ * Exclusivo para usuários no plano TURBO. Utiliza namespace estritamente isolado.
  */
-export async function fetchMensagensWhatsApp(): Promise<MensagemWhatsApp[]> {
+export async function fetchMensagensWhatsApp(userId?: string | null): Promise<MensagemWhatsApp[]> {
+  const activeId = userId !== undefined ? userId : getCachedUserId();
   if (!client) {
-    try {
-      const raw = localStorage.getItem('fechazap_mensagens_whatsapp');
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
+    return loadUserMensagens(activeId);
   }
 
   try {
     const { data: authData } = await client.auth.getUser();
     if (!authData?.user) {
-      const raw = localStorage.getItem('fechazap_mensagens_whatsapp');
-      return raw ? JSON.parse(raw) : [];
+      return loadUserMensagens(activeId);
     }
 
     const { data, error } = await client
@@ -252,8 +280,7 @@ export async function fetchMensagensWhatsApp(): Promise<MensagemWhatsApp[]> {
 
     if (error) {
       console.warn('Erro ao carregar mensagens do WhatsApp:', error);
-      const raw = localStorage.getItem('fechazap_mensagens_whatsapp');
-      return raw ? JSON.parse(raw) : [];
+      return loadUserMensagens(authData.user.id);
     }
 
     const mapped: MensagemWhatsApp[] = (data || []).map((row: any) => ({
@@ -268,30 +295,22 @@ export async function fetchMensagensWhatsApp(): Promise<MensagemWhatsApp[]> {
       createdAt: row.created_at,
     }));
 
-    localStorage.setItem('fechazap_mensagens_whatsapp', JSON.stringify(mapped));
+    saveUserMensagens(authData.user.id, mapped);
     return mapped;
   } catch (err) {
     console.warn('Exceção ao buscar mensagens do WhatsApp:', err);
-    const raw = localStorage.getItem('fechazap_mensagens_whatsapp');
-    return raw ? JSON.parse(raw) : [];
+    return loadUserMensagens(activeId);
   }
 }
 
 /**
- * Marca uma mensagem como lida no Supabase e no cache local
+ * Marca uma mensagem como lida no Supabase e no cache local isolado
  */
-export async function markMensagemAsRead(mensagemId: string): Promise<boolean> {
-  // Atualiza cache local
-  try {
-    const raw = localStorage.getItem('fechazap_mensagens_whatsapp');
-    if (raw) {
-      const list: MensagemWhatsApp[] = JSON.parse(raw);
-      const updated = list.map((m) => (m.id === mensagemId ? { ...m, lida: true } : m));
-      localStorage.setItem('fechazap_mensagens_whatsapp', JSON.stringify(updated));
-    }
-  } catch {
-    // ignore
-  }
+export async function markMensagemAsRead(mensagemId: string, userId?: string | null): Promise<boolean> {
+  const activeId = userId !== undefined ? userId : getCachedUserId();
+  const list = loadUserMensagens(activeId);
+  const updated = list.map((m) => (m.id === mensagemId ? { ...m, lida: true } : m));
+  saveUserMensagens(activeId, updated);
 
   if (!client) return true;
 

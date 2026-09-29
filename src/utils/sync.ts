@@ -1,10 +1,10 @@
 import { Orcamento, Cliente, TipoPlano, ItemOrcamento, StatusOrcamento } from '../types';
 import { getSupabase } from './supabase';
-
-const SYNC_QUEUE_KEY = 'fechazap_pending_sync_queue_v1';
+import { loadUserSyncQueue, saveUserSyncQueue } from './storage';
 
 export interface PendingSyncItem {
   id: string;
+  userId: string; // Identifica com precisão e segurança o usuário dono da operação
   type: 'save_orcamento' | 'delete_orcamento' | 'save_cliente' | 'delete_cliente';
   payload: any;
   timestamp: number;
@@ -14,35 +14,25 @@ export function isCloudSyncEnabled(plano: TipoPlano): boolean {
   return plano === 'PRO' || plano === 'TURBO';
 }
 
-function getSyncQueue(): PendingSyncItem[] {
-  try {
-    const raw = localStorage.getItem(SYNC_QUEUE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+function getSyncQueue(userId: string | null | undefined): PendingSyncItem[] {
+  return loadUserSyncQueue<PendingSyncItem>(userId);
 }
 
-function saveSyncQueue(queue: PendingSyncItem[]): void {
-  try {
-    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
-  } catch {
-    // ignore
-  }
+function saveSyncQueue(userId: string | null | undefined, queue: PendingSyncItem[]): void {
+  saveUserSyncQueue(userId, queue);
 }
 
-function enqueueSync(item: Omit<PendingSyncItem, 'timestamp'>): void {
-  const queue = getSyncQueue();
-  // Se já existir operação pendente com mesmo ID e tipo, substitui
+export function enqueueSync(item: Omit<PendingSyncItem, 'timestamp'>): void {
+  const queue = getSyncQueue(item.userId);
   const filtered = queue.filter((q) => !(q.id === item.id && q.type === item.type));
   filtered.push({ ...item, timestamp: Date.now() });
-  saveSyncQueue(filtered);
+  saveSyncQueue(item.userId, filtered);
 }
 
-function dequeueSync(id: string, type: PendingSyncItem['type']): void {
-  const queue = getSyncQueue();
+export function dequeueSync(userId: string | null | undefined, id: string, type: PendingSyncItem['type']): void {
+  const queue = getSyncQueue(userId);
   const filtered = queue.filter((q) => !(q.id === id && q.type === type));
-  saveSyncQueue(filtered);
+  saveSyncQueue(userId, filtered);
 }
 
 // ==========================================
@@ -175,10 +165,18 @@ export async function fetchCloudData(plano: TipoPlano): Promise<{
 // Gravação Otimista com Fallback e Fila Offline
 // ==========================================
 
+export interface SyncOrcamentoResult {
+  success: boolean;
+  synced: boolean;
+  errorCode?: 'QUOTA_EXCEEDED' | 'NETWORK_ERROR' | 'UNKNOWN';
+  errorMessage?: string;
+}
+
 export async function syncSaveOrcamento(
   orcamento: Orcamento,
-  plano: TipoPlano
-): Promise<{ success: boolean; synced: boolean }> {
+  plano: TipoPlano,
+  currentUserId?: string | null
+): Promise<SyncOrcamentoResult> {
   // Se for GRATUITO, mantém 100% local sem tocar o Supabase
   if (!isCloudSyncEnabled(plano)) {
     return { success: true, synced: false };
@@ -186,38 +184,68 @@ export async function syncSaveOrcamento(
 
   const supabase = getSupabase();
   if (!supabase) {
-    enqueueSync({ id: orcamento.id, type: 'save_orcamento', payload: orcamento });
+    if (currentUserId) {
+      enqueueSync({ id: orcamento.id, userId: currentUserId, type: 'save_orcamento', payload: orcamento });
+    }
     return { success: true, synced: false };
   }
 
   try {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) {
-      enqueueSync({ id: orcamento.id, type: 'save_orcamento', payload: orcamento });
+      if (currentUserId) {
+        enqueueSync({ id: orcamento.id, userId: currentUserId, type: 'save_orcamento', payload: orcamento });
+      }
       return { success: true, synced: false };
     }
 
-    const payload = mapOrcamentoToDb(orcamento, authData.user.id);
+    const activeUserId = authData.user.id;
+    // Isolamento multi-tenant: rejeita upload se o usuário em tela diferir da sessão autenticada
+    if (currentUserId && currentUserId !== activeUserId) {
+      console.warn('Conflito de sessão ao sincronizar orçamento: IDs divergentes.');
+      return { success: false, synced: false, errorCode: 'UNKNOWN', errorMessage: 'Sessão divergente.' };
+    }
+
+    const payload = mapOrcamentoToDb(orcamento, activeUserId);
     const { error } = await supabase.from('orcamentos').upsert(payload, { onConflict: 'id' });
 
     if (error) {
+      // Identifica com precisão erro de quota excedida do PostgreSQL (código P0001 ou mensagem de quota)
+      const isQuotaExceeded =
+        error.code === 'P0001' ||
+        error.message?.includes('QUOTA_EXCEEDED') ||
+        error.message?.includes('Limite mensal');
+
+      if (isQuotaExceeded) {
+        console.warn('Bloqueio estrito de quota no PostgreSQL:', error.message);
+        return {
+          success: false,
+          synced: false,
+          errorCode: 'QUOTA_EXCEEDED',
+          errorMessage: 'Você atingiu o limite de 5 orçamentos deste mês. Faça upgrade para continuar criando novos orçamentos.',
+        };
+      }
+
       console.warn('Erro ao sincronizar orçamento no Supabase, adicionado à fila:', error);
-      enqueueSync({ id: orcamento.id, type: 'save_orcamento', payload: orcamento });
-      return { success: true, synced: false };
+      enqueueSync({ id: orcamento.id, userId: activeUserId, type: 'save_orcamento', payload: orcamento });
+      return { success: true, synced: false, errorCode: 'NETWORK_ERROR', errorMessage: error.message };
     }
 
-    dequeueSync(orcamento.id, 'save_orcamento');
+    dequeueSync(activeUserId, orcamento.id, 'save_orcamento');
     return { success: true, synced: true };
-  } catch (err) {
+  } catch (err: any) {
     console.warn('Exceção ao gravar orçamento no Supabase:', err);
-    enqueueSync({ id: orcamento.id, type: 'save_orcamento', payload: orcamento });
-    return { success: true, synced: false };
+    if (currentUserId) {
+      enqueueSync({ id: orcamento.id, userId: currentUserId, type: 'save_orcamento', payload: orcamento });
+    }
+    return { success: true, synced: false, errorCode: 'UNKNOWN', errorMessage: err?.message };
   }
 }
 
 export async function syncDeleteOrcamento(
   orcamentoId: string,
-  plano: TipoPlano
+  plano: TipoPlano,
+  currentUserId?: string | null
 ): Promise<{ success: boolean; synced: boolean }> {
   if (!isCloudSyncEnabled(plano)) {
     return { success: true, synced: false };
@@ -225,42 +253,54 @@ export async function syncDeleteOrcamento(
 
   const supabase = getSupabase();
   if (!supabase) {
-    enqueueSync({ id: orcamentoId, type: 'delete_orcamento', payload: { id: orcamentoId } });
+    if (currentUserId) {
+      enqueueSync({ id: orcamentoId, userId: currentUserId, type: 'delete_orcamento', payload: { id: orcamentoId } });
+    }
     return { success: true, synced: false };
   }
 
   try {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) {
-      enqueueSync({ id: orcamentoId, type: 'delete_orcamento', payload: { id: orcamentoId } });
+      if (currentUserId) {
+        enqueueSync({ id: orcamentoId, userId: currentUserId, type: 'delete_orcamento', payload: { id: orcamentoId } });
+      }
       return { success: true, synced: false };
+    }
+
+    const activeUserId = authData.user.id;
+    if (currentUserId && currentUserId !== activeUserId) {
+      return { success: false, synced: false };
     }
 
     const { error } = await supabase
       .from('orcamentos')
       .delete()
       .eq('id', orcamentoId)
-      .eq('user_id', authData.user.id);
+      .eq('user_id', activeUserId);
 
     if (error) {
       console.warn('Erro ao deletar orçamento no Supabase, enfileirado:', error);
-      enqueueSync({ id: orcamentoId, type: 'delete_orcamento', payload: { id: orcamentoId } });
+      enqueueSync({ id: orcamentoId, userId: activeUserId, type: 'delete_orcamento', payload: { id: orcamentoId } });
       return { success: true, synced: false };
     }
 
-    dequeueSync(orcamentoId, 'delete_orcamento');
-    dequeueSync(orcamentoId, 'save_orcamento');
+    dequeueSync(activeUserId, orcamentoId, 'delete_orcamento');
+    dequeueSync(activeUserId, orcamentoId, 'save_orcamento');
     return { success: true, synced: true };
   } catch (err) {
     console.warn('Exceção ao deletar orçamento no Supabase:', err);
-    enqueueSync({ id: orcamentoId, type: 'delete_orcamento', payload: { id: orcamentoId } });
+    if (currentUserId) {
+      enqueueSync({ id: orcamentoId, userId: currentUserId, type: 'delete_orcamento', payload: { id: orcamentoId } });
+    }
     return { success: true, synced: false };
   }
 }
 
 export async function syncSaveCliente(
   cliente: Cliente,
-  plano: TipoPlano
+  plano: TipoPlano,
+  currentUserId?: string | null
 ): Promise<{ success: boolean; synced: boolean }> {
   if (!isCloudSyncEnabled(plano)) {
     return { success: true, synced: false };
@@ -268,38 +308,50 @@ export async function syncSaveCliente(
 
   const supabase = getSupabase();
   if (!supabase) {
-    enqueueSync({ id: cliente.id, type: 'save_cliente', payload: cliente });
+    if (currentUserId) {
+      enqueueSync({ id: cliente.id, userId: currentUserId, type: 'save_cliente', payload: cliente });
+    }
     return { success: true, synced: false };
   }
 
   try {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) {
-      enqueueSync({ id: cliente.id, type: 'save_cliente', payload: cliente });
+      if (currentUserId) {
+        enqueueSync({ id: cliente.id, userId: currentUserId, type: 'save_cliente', payload: cliente });
+      }
       return { success: true, synced: false };
     }
 
-    const payload = mapClienteToDb(cliente, authData.user.id);
+    const activeUserId = authData.user.id;
+    if (currentUserId && currentUserId !== activeUserId) {
+      return { success: false, synced: false };
+    }
+
+    const payload = mapClienteToDb(cliente, activeUserId);
     const { error } = await supabase.from('clientes').upsert(payload, { onConflict: 'id' });
 
     if (error) {
       console.warn('Erro ao sincronizar cliente no Supabase, enfileirado:', error);
-      enqueueSync({ id: cliente.id, type: 'save_cliente', payload: cliente });
+      enqueueSync({ id: cliente.id, userId: activeUserId, type: 'save_cliente', payload: cliente });
       return { success: true, synced: false };
     }
 
-    dequeueSync(cliente.id, 'save_cliente');
+    dequeueSync(activeUserId, cliente.id, 'save_cliente');
     return { success: true, synced: true };
   } catch (err) {
     console.warn('Exceção ao salvar cliente no Supabase:', err);
-    enqueueSync({ id: cliente.id, type: 'save_cliente', payload: cliente });
+    if (currentUserId) {
+      enqueueSync({ id: cliente.id, userId: currentUserId, type: 'save_cliente', payload: cliente });
+    }
     return { success: true, synced: false };
   }
 }
 
 export async function syncDeleteCliente(
   clienteId: string,
-  plano: TipoPlano
+  plano: TipoPlano,
+  currentUserId?: string | null
 ): Promise<{ success: boolean; synced: boolean }> {
   if (!isCloudSyncEnabled(plano)) {
     return { success: true, synced: false };
@@ -307,44 +359,56 @@ export async function syncDeleteCliente(
 
   const supabase = getSupabase();
   if (!supabase) {
-    enqueueSync({ id: clienteId, type: 'delete_cliente', payload: { id: clienteId } });
+    if (currentUserId) {
+      enqueueSync({ id: clienteId, userId: currentUserId, type: 'delete_cliente', payload: { id: clienteId } });
+    }
     return { success: true, synced: false };
   }
 
   try {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) {
-      enqueueSync({ id: clienteId, type: 'delete_cliente', payload: { id: clienteId } });
+      if (currentUserId) {
+        enqueueSync({ id: clienteId, userId: currentUserId, type: 'delete_cliente', payload: { id: clienteId } });
+      }
       return { success: true, synced: false };
+    }
+
+    const activeUserId = authData.user.id;
+    if (currentUserId && currentUserId !== activeUserId) {
+      return { success: false, synced: false };
     }
 
     const { error } = await supabase
       .from('clientes')
       .delete()
       .eq('id', clienteId)
-      .eq('user_id', authData.user.id);
+      .eq('user_id', activeUserId);
 
     if (error) {
       console.warn('Erro ao deletar cliente no Supabase, enfileirado:', error);
-      enqueueSync({ id: clienteId, type: 'delete_cliente', payload: { id: clienteId } });
+      enqueueSync({ id: clienteId, userId: activeUserId, type: 'delete_cliente', payload: { id: clienteId } });
       return { success: true, synced: false };
     }
 
-    dequeueSync(clienteId, 'delete_cliente');
-    dequeueSync(clienteId, 'save_cliente');
+    dequeueSync(activeUserId, clienteId, 'delete_cliente');
+    dequeueSync(activeUserId, clienteId, 'save_cliente');
     return { success: true, synced: true };
   } catch (err) {
     console.warn('Exceção ao deletar cliente no Supabase:', err);
-    enqueueSync({ id: clienteId, type: 'delete_cliente', payload: { id: clienteId } });
+    if (currentUserId) {
+      enqueueSync({ id: clienteId, userId: currentUserId, type: 'delete_cliente', payload: { id: clienteId } });
+    }
     return { success: true, synced: false };
   }
 }
 
-// Processa fila offline quando houver conexão e plano PRO/TURBO
-export async function flushPendingSyncQueue(plano: TipoPlano): Promise<void> {
+// Processa fila offline quando houver conexão e plano PRO/TURBO garantindo isolamento por usuário
+export async function flushPendingSyncQueue(
+  plano: TipoPlano,
+  currentUserId?: string | null
+): Promise<void> {
   if (!isCloudSyncEnabled(plano)) return;
-  const queue = getSyncQueue();
-  if (queue.length === 0) return;
 
   const supabase = getSupabase();
   if (!supabase) return;
@@ -352,23 +416,46 @@ export async function flushPendingSyncQueue(plano: TipoPlano): Promise<void> {
   const { data: authData } = await supabase.auth.getUser();
   if (!authData?.user) return;
 
+  const activeUserId = authData.user.id;
+  if (currentUserId && currentUserId !== activeUserId) {
+    console.warn('flushPendingSyncQueue abortado: currentUserId difere do usuário logado no Supabase.');
+    return;
+  }
+
+  const queue = getSyncQueue(activeUserId);
+  if (queue.length === 0) return;
+
   const remainingQueue: PendingSyncItem[] = [];
 
   for (const item of queue) {
+    // REGRA DE ISOLAMENTO: Descarta qualquer item que não pertença a este usuário
+    if (item.userId !== activeUserId) {
+      console.warn('Item offline ignorado por violar isolamento multi-tenant:', item.id);
+      continue;
+    }
+
     try {
       if (item.type === 'save_orcamento') {
-        const payload = mapOrcamentoToDb(item.payload, authData.user.id);
+        const payload = mapOrcamentoToDb(item.payload, activeUserId);
         const { error } = await supabase.from('orcamentos').upsert(payload, { onConflict: 'id' });
-        if (error) remainingQueue.push(item);
+        if (error) {
+          const isQuota =
+            error.code === 'P0001' ||
+            error.message?.includes('QUOTA_EXCEEDED') ||
+            error.message?.includes('Limite mensal');
+          if (!isQuota) {
+            remainingQueue.push(item);
+          }
+        }
       } else if (item.type === 'delete_orcamento') {
         const { error } = await supabase
           .from('orcamentos')
           .delete()
           .eq('id', item.id)
-          .eq('user_id', authData.user.id);
+          .eq('user_id', activeUserId);
         if (error) remainingQueue.push(item);
       } else if (item.type === 'save_cliente') {
-        const payload = mapClienteToDb(item.payload, authData.user.id);
+        const payload = mapClienteToDb(item.payload, activeUserId);
         const { error } = await supabase.from('clientes').upsert(payload, { onConflict: 'id' });
         if (error) remainingQueue.push(item);
       } else if (item.type === 'delete_cliente') {
@@ -376,7 +463,7 @@ export async function flushPendingSyncQueue(plano: TipoPlano): Promise<void> {
           .from('clientes')
           .delete()
           .eq('id', item.id)
-          .eq('user_id', authData.user.id);
+          .eq('user_id', activeUserId);
         if (error) remainingQueue.push(item);
       }
     } catch {
@@ -384,5 +471,5 @@ export async function flushPendingSyncQueue(plano: TipoPlano): Promise<void> {
     }
   }
 
-  saveSyncQueue(remainingQueue);
+  saveSyncQueue(activeUserId, remainingQueue);
 }
