@@ -6,7 +6,16 @@ import { mapDbToOrcamento, mapOrcamentoToDb, mapDbToCliente, mapClienteToDb } fr
 import { formatCurrency, formatPhone, cleanPhone } from '../utils/format';
 import { generateWhatsAppQuoteText, generateWhatsAppUrl } from '../utils/whatsapp';
 import { generateOrcamentoPrintHtml } from '../utils/pdf';
-import { loadUserEmpresa, loadUserOrcamentos, saveUserOrcamentos, resetDemoData } from '../utils/storage';
+import {
+  loadUserEmpresa,
+  loadUserOrcamentos,
+  saveUserOrcamentos,
+  loadUserClientes,
+  saveUserClientes,
+  loadUserSyncQueue,
+  saveUserSyncQueue,
+  resetDemoData,
+} from '../utils/storage';
 import { Orcamento, Cliente, ConfiguracaoEmpresa } from '../types';
 
 // Mock in-memory do localStorage para ambiente Node/Bun
@@ -140,6 +149,78 @@ describe('FechaZap - Suíte de Endurecimento Técnico (Fase 7/9)', () => {
       const dbCliA = mapClienteToDb(cli, userAId);
       expect(dbCliA.user_id).toBe(userAId);
       expect(dbCliA.user_id).not.toBe(userBId);
+    });
+
+    it('deve isolar completamente dados locais e fila offline na transição Usuário A -> logout -> Usuário B', () => {
+      const userAId = 'user_uuid_alpha_111';
+      const userBId = 'user_uuid_beta_222';
+
+      // 1. Usuário A autenticado salva dados e enfileira item offline
+      const orcsA: Orcamento[] = [
+        {
+          id: 'orc_alpha_1',
+          numero: '001',
+          clienteNome: 'Cliente do A',
+          clienteTelefone: '11911111111',
+          itens: [{ id: '1', descricao: 'Serviço A', quantidade: 1, valorUnitario: 500, total: 500 }],
+          subtotal: 500,
+          descontoTipo: 'valor',
+          descontoValor: 0,
+          valorTotal: 500,
+          status: 'aprovado',
+          dataCriacao: '2026-10-01',
+          formaPagamento: 'Pix',
+        },
+      ];
+      const clisA: Cliente[] = [
+        { id: 'cli_alpha_1', nome: 'Cliente do A', telefone: '11911111111', dataCadastro: '2026-10-01' },
+      ];
+      const queueA = [{ type: 'save_orcamento', orcamentoId: 'orc_alpha_1', timestamp: Date.now() }];
+
+      saveUserOrcamentos(userAId, orcsA);
+      saveUserClientes(userAId, clisA);
+      saveUserSyncQueue(userAId, queueA);
+
+      // 2. Usuário A faz logout: contexto muda para visitante anônimo (null)
+      const anonOrcs = loadUserOrcamentos(null);
+      const anonQueue = loadUserSyncQueue(null);
+      expect(anonOrcs.some((o) => o.id === 'orc_alpha_1')).toBe(false);
+      expect(anonQueue.length).toBe(0);
+
+      // 3. Usuário B faz login: contexto muda para userBId
+      const orcsB = loadUserOrcamentos(userBId);
+      const clisB = loadUserClientes(userBId);
+      const queueB = loadUserSyncQueue(userBId);
+
+      // Dados de A NÃO podem aparecer para B
+      expect(orcsB.length).toBe(0);
+      expect(clisB.length).toBe(0);
+      expect(queueB.length).toBe(0);
+
+      // 4. Usuário B salva seus próprios dados
+      const orcsBData: Orcamento[] = [
+        {
+          id: 'orc_beta_1',
+          numero: '900',
+          clienteNome: 'Cliente do B',
+          clienteTelefone: '21922222222',
+          itens: [{ id: '1', descricao: 'Serviço B', quantidade: 2, valorUnitario: 300, total: 600 }],
+          subtotal: 600,
+          descontoTipo: 'valor',
+          descontoValor: 0,
+          valorTotal: 600,
+          status: 'pendente',
+          dataCriacao: '2026-10-02',
+          formaPagamento: 'Boleto',
+        },
+      ];
+      saveUserOrcamentos(userBId, orcsBData);
+
+      // 5. Verifica se os dados de A permaneceram intactos em seu próprio namespace
+      const reloadedOrcsA = loadUserOrcamentos(userAId);
+      expect(reloadedOrcsA.length).toBe(1);
+      expect(reloadedOrcsA[0].id).toBe('orc_alpha_1');
+      expect(reloadedOrcsA.some((o) => o.id === 'orc_beta_1')).toBe(false);
     });
   });
 

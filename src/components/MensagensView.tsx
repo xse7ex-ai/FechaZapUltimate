@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   MessageSquare,
   Search,
@@ -13,10 +13,13 @@ import {
   Inbox,
   Filter,
   ArrowUpRight,
+  ShieldCheck,
+  Radio,
 } from 'lucide-react';
-import { MensagemWhatsApp, Orcamento, TipoPlano } from '../types';
+import { MensagemWhatsApp, Orcamento, TipoPlano, WhatsAppConnection } from '../types';
 import { formatPhone } from '../utils/format';
 import { openWhatsAppMessage } from '../utils/whatsapp';
+import { fetchWhatsAppConnection } from '../utils/supabase';
 
 interface MensagensViewProps {
   mensagens: MensagemWhatsApp[];
@@ -46,8 +49,15 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'unread'>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [connection, setConnection] = useState<WhatsAppConnection | null>(null);
 
   const isTurbo = userPlano === 'TURBO';
+
+  useEffect(() => {
+    if (isTurbo) {
+      fetchWhatsAppConnection().then(setConnection).catch(() => {});
+    }
+  }, [isTurbo]);
 
   const unreadCount = useMemo(() => {
     return mensagens.filter((m) => !m.lida).length;
@@ -70,6 +80,9 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
+      if (isTurbo) {
+        fetchWhatsAppConnection().then(setConnection).catch(() => {});
+      }
       await onRefresh();
       onShowToast?.('Caixa Atualizada', 'Mensagens sincronizadas com sucesso.', 'info');
     } finally {
@@ -213,6 +226,35 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
         </div>
       </div>
 
+      {/* Informações do Canal Ativo & Resolução de Roteamento (Arquitetura Híbrida) */}
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Radio className={`w-4 h-4 ${connection?.status === 'active' ? 'text-emerald-500 animate-pulse' : 'text-blue-500'}`} />
+            <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px]">
+              {connection?.status === 'active' ? 'Canal Individual Ativo' : 'Canal Central FechaZap Ativo'}
+            </span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              connection?.status === 'active'
+                ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
+            }`}>
+              {connection?.status === 'active' ? 'Meta WABA Individual' : 'Roteamento Contextual'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Isolamento Multi-Tenant Garantido</span>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+          {connection?.status === 'active'
+            ? `Respostas chegam diretamente pelo seu número comercial Meta (ID: ${connection.phoneNumberId}), com prioridade direta.`
+            : 'Respostas recebidas no número central oficial do FechaZap são roteadas automaticamente para sua conta quando a proposta for exclusiva (UNIQUE). Contatos ambíguos (AMBIGUOUS) ou não cadastrados (NOT_FOUND) são isolados pelo servidor sem vazamento entre contas.'}
+        </p>
+      </div>
+
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {/* Search */}
@@ -269,8 +311,19 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
               : 'Nenhuma resposta recebida ainda.'}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-            Assim que um cliente responder ao follow-up enviado pelo número oficial do FechaZap, a resposta aparecerá automaticamente aqui.
+            {searchTerm || filterType === 'unread'
+              ? 'Tente ajustar os termos de busca ou remover o filtro de mensagens não lidas.'
+              : 'Assim que um cliente responder ao orçamento ou follow-up disparado, a mensagem será roteada automaticamente para esta caixa.'}
           </p>
+          {!searchTerm && filterType !== 'unread' && (
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 max-w-lg mx-auto text-[11px] text-slate-400 dark:text-slate-500 space-y-1 text-left bg-slate-50/60 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
+              <span className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Garantia de Entrega e Sigilo Multi-Tenant:
+              </span>
+              <p>• <strong>UNIQUE:</strong> Proposta exclusiva com este cliente é entregue diretamente a você.</p>
+              <p>• <strong>AMBIGUOUS / NOT_FOUND:</strong> Respostas sem atribuição inequívoca são retidas no servidor para proteger o sigilo comercial entre prestadores.</p>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
