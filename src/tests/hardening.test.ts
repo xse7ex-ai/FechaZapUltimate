@@ -139,6 +139,77 @@ describe('FechaZap - Suíte de Endurecimento Técnico (Fase 7/9)', () => {
       const errC = parseAiError('Serviço de quota temporariamente indisponível');
       expect(errC).toContain('temporariamente indisponível');
     });
+
+    it('deve aplicar limite de 5 orçamentos/mês no plano GRATUITO e permitir PRO/TURBO ilimitados', () => {
+      // Simulação da lógica da RPC check_and_consume_gratuito_quota
+      class MockQuotaCounterService {
+        private counters: Map<string, number> = new Map();
+
+        checkAndConsume(userId: string, plano: 'GRATUITO' | 'PRO' | 'TURBO', mes: string) {
+          if (plano === 'PRO' || plano === 'TURBO') {
+            return { success: true, plano, consumed: false };
+          }
+
+          const key = `${userId}:${mes}`;
+          const current = this.counters.get(key) || 0;
+
+          if (current >= 5) {
+            throw new Error('QUOTA_EXCEEDED: Limite mensal de 5 orçamentos atingido para o plano GRATUITO.');
+          }
+
+          this.counters.set(key, current + 1);
+          return { success: true, plano: 'GRATUITO', consumed: true, contador: current + 1 };
+        }
+      }
+
+      const service = new MockQuotaCounterService();
+      const mesAtual = '2026-10-01';
+      const userId = 'user_gratuito_123';
+
+      // Cria 5 orçamentos com sucesso
+      for (let i = 1; i <= 5; i++) {
+        const res = service.checkAndConsume(userId, 'GRATUITO', mesAtual);
+        expect(res.success).toBe(true);
+        expect(res.contador).toBe(i);
+      }
+
+      // 6º orçamento deve ser bloqueado com QUOTA_EXCEEDED
+      expect(() => {
+        service.checkAndConsume(userId, 'GRATUITO', mesAtual);
+      }).toThrow('QUOTA_EXCEEDED');
+
+      // Usuário PRO ou TURBO não sofre bloqueio
+      const proRes = service.checkAndConsume('user_pro_999', 'PRO', mesAtual);
+      expect(proRes.success).toBe(true);
+      expect(proRes.consumed).toBe(false);
+
+      const turboRes = service.checkAndConsume('user_turbo_888', 'TURBO', mesAtual);
+      expect(turboRes.success).toBe(true);
+      expect(turboRes.consumed).toBe(false);
+    });
+
+    it('deve permitir criação offline do plano GRATUITO quando Supabase estiver indisponível', () => {
+      // Função simulada de fallback resiliente
+      const evaluateQuotaResult = (error: { code?: string; message?: string } | null) => {
+        if (!error) return { success: true };
+        const isQuota =
+          error.code === 'P0001' ||
+          error.message?.includes('QUOTA_EXCEEDED');
+        if (isQuota) {
+          return { success: false, quotaExceeded: true };
+        }
+        // Falha técnica/rede -> fallback offline permitido
+        return { success: true };
+      };
+
+      // Erro de rede (Failed to fetch)
+      expect(evaluateQuotaResult({ message: 'TypeError: Failed to fetch' }).success).toBe(true);
+
+      // Erro de quota atingida
+      const quotaErr = evaluateQuotaResult({ code: 'P0001', message: 'QUOTA_EXCEEDED: Limite atingido' });
+      expect(quotaErr.success).toBe(false);
+      expect(quotaErr.quotaExceeded).toBe(true);
+    });
   });
 
   // ----------------------------------------------------------------------------

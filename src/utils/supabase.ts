@@ -613,3 +613,62 @@ export async function attemptClientSidePlanChange(
   }
 }
 
+export interface QuotaConsumeResult {
+  success: boolean;
+  quotaExceeded?: boolean;
+  errorMessage?: string;
+}
+
+/**
+ * Validação e consumo da quota de 5 orçamentos/mês para o plano GRATUITO.
+ * Executada via RPC atômica (check_and_consume_gratuito_quota) no Supabase.
+ * - Se exceder quota (P0001 / QUOTA_EXCEEDED), retorna quotaExceeded: true.
+ * - Se falhar por conectividade/indisponibilidade (offline, Supabase fora do ar),
+ *   retorna success: true permitindo a criação local com log no console.
+ */
+export async function checkAndConsumeGratuitoQuota(): Promise<QuotaConsumeResult> {
+  if (!client) {
+    console.warn('[Quota GRATUITO] Cliente Supabase não configurado. Operação offline permitida.');
+    return { success: true };
+  }
+
+  try {
+    const { error } = await client.rpc('check_and_consume_gratuito_quota');
+
+    if (error) {
+      const isQuotaExceeded =
+        error.code === 'P0001' ||
+        (typeof error.message === 'string' && error.message.includes('QUOTA_EXCEEDED')) ||
+        (typeof error.details === 'string' && error.details.includes('QUOTA_EXCEEDED'));
+
+      if (isQuotaExceeded) {
+        return {
+          success: false,
+          quotaExceeded: true,
+          errorMessage:
+            error.message ||
+            'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados e sincronizar na nuvem.',
+        };
+      }
+
+      // Falha por qualquer outro motivo (sem internet, erro de servidor, Supabase indisponível)
+      // Conforme especificação: permitir criação local mesmo assim, com console.warn
+      console.warn(
+        '[Quota GRATUITO] Falha ao consultar RPC no Supabase (criação local permitida):',
+        error.message || error
+      );
+      return { success: true };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    // Exceção de rede (offline, fetch abort, etc.)
+    console.warn(
+      '[Quota GRATUITO] Erro de rede ao verificar cota no servidor (criação local permitida):',
+      err?.message || err
+    );
+    return { success: true };
+  }
+}
+
+

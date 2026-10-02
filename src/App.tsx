@@ -39,6 +39,7 @@ import {
   fetchServerUserProfileAndQuota,
   fetchMensagensWhatsApp,
   markMensagemAsRead,
+  checkAndConsumeGratuitoQuota,
 } from './utils/supabase';
 import { generateUUID } from './utils/uuid';
 import {
@@ -403,14 +404,14 @@ export default function App() {
   };
 
   // Save quote handler
-  const handleSaveOrcamento = (savedOrcamento: Orcamento, newCliente?: Cliente) => {
+  const handleSaveOrcamento = async (savedOrcamento: Orcamento, newCliente?: Cliente) => {
     const isEditing = orcamentos.some((o) => o.id === savedOrcamento.id);
     const mesAtual = new Date().toISOString().slice(0, 7);
     const orcamentosMes = orcamentos.filter(
       (o) => o.dataCriacao && o.dataCriacao.startsWith(mesAtual)
     );
 
-    // REGRA DE NEGÓCIO: GRATUITO possui limite estrito de 5 orçamentos/mês (100% client-side)
+    // REGRA DE NEGÓCIO: GRATUITO possui limite estrito de 5 orçamentos/mês (filtro rápido de UX)
     if (!isEditing && userPlano === 'GRATUITO' && orcamentosMes.length >= 5) {
       addToast(
         'Limite de Orçamentos Atingido',
@@ -423,6 +424,25 @@ export default function App() {
       );
       setIsPerfilOpen(true);
       return;
+    }
+
+    // Validação real de quota no servidor para plano GRATUITO (apenas na criação com usuário autenticado)
+    if (!isEditing && userPlano === 'GRATUITO' && currentUserId) {
+      const quotaCheck = await checkAndConsumeGratuitoQuota();
+      if (!quotaCheck.success && quotaCheck.quotaExceeded) {
+        addToast(
+          'Limite de Orçamentos Atingido',
+          quotaCheck.errorMessage ||
+            'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados e sincronizar na nuvem.',
+          'error',
+          {
+            label: 'Ver Planos',
+            onClick: () => setIsPerfilOpen(true),
+          }
+        );
+        setIsPerfilOpen(true);
+        return;
+      }
     }
 
     if (newCliente) {
@@ -476,13 +496,13 @@ export default function App() {
   };
 
   // Duplicate quote
-  const handleDuplicateOrcamento = (orc: Orcamento) => {
+  const handleDuplicateOrcamento = async (orc: Orcamento) => {
     const mesAtual = new Date().toISOString().slice(0, 7);
     const orcamentosMes = orcamentos.filter(
       (o) => o.dataCriacao && o.dataCriacao.startsWith(mesAtual)
     );
 
-    // Validação preventiva de quota para duplicação no plano GRATUITO
+    // Validação preventiva rápida de quota para duplicação no plano GRATUITO (filtro de UX)
     if (userPlano === 'GRATUITO' && orcamentosMes.length >= 5) {
       addToast(
         'Limite de Orçamentos Atingido',
@@ -495,6 +515,25 @@ export default function App() {
       );
       setIsPerfilOpen(true);
       return;
+    }
+
+    // Validação real de quota no servidor para plano GRATUITO (usuário autenticado)
+    if (userPlano === 'GRATUITO' && currentUserId) {
+      const quotaCheck = await checkAndConsumeGratuitoQuota();
+      if (!quotaCheck.success && quotaCheck.quotaExceeded) {
+        addToast(
+          'Limite de Orçamentos Atingido',
+          quotaCheck.errorMessage ||
+            'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados e sincronizar na nuvem.',
+          'error',
+          {
+            label: 'Ver Planos',
+            onClick: () => setIsPerfilOpen(true),
+          }
+        );
+        setIsPerfilOpen(true);
+        return;
+      }
     }
 
     const nextNum = String(Number(orc.numero || 100) + 1);
