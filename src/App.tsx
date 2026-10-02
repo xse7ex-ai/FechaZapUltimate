@@ -63,6 +63,7 @@ import {
   checkLegacyData,
   migrateLegacyDataToUser,
   dismissLegacyData,
+  resetDemoData,
 } from './utils/storage';
 import {
   getOrcamentosProximosValidade,
@@ -73,6 +74,14 @@ import { getCachedUserId } from './utils/supabase';
 
 export default function App() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getCachedUserId());
+  const [userPlano, setUserPlano] = useState<TipoPlano>('GRATUITO');
+
+  // Modo Demonstração (dados fictícios de exemplo isolados, plano simulado GRATUITO)
+  const [modoDemonstracao, setModoDemonstracao] = useState<boolean>(false);
+
+  // Contexto ativo para armazenamento e permissões
+  const effectiveUserId = modoDemonstracao ? null : currentUserId;
+  const effectivePlano: TipoPlano = modoDemonstracao ? 'GRATUITO' : userPlano;
 
   // State with LocalStorage Persistence isolada por namespace de usuário
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>(() =>
@@ -95,7 +104,57 @@ export default function App() {
   const [isConfigOpen, setIsConfigOpen] = useState<boolean>(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
   const [isPerfilOpen, setIsPerfilOpen] = useState<boolean>(false);
-  const [userPlano, setUserPlano] = useState<TipoPlano>('GRATUITO');
+
+  // Alterna Modo Demonstração recarregando imediatamente os dados de contexto
+  const toggleModoDemonstracao = () => {
+    const nextMode = !modoDemonstracao;
+    setModoDemonstracao(nextMode);
+
+    const targetId = nextMode ? null : currentUserId;
+    const targetPlano = nextMode ? 'GRATUITO' : userPlano;
+
+    // Recarrega imediatamente os dados correspondentes ao novo contexto
+    const newOrcamentos = loadUserOrcamentos(targetId);
+    const newClientes = loadUserClientes(targetId);
+    const newEmpresa = loadUserEmpresa(targetId);
+    const newMensagens = nextMode ? [] : loadUserMensagens(targetId);
+
+    setOrcamentos(newOrcamentos);
+    setClientes(newClientes);
+    setEmpresa(newEmpresa);
+    setMensagens(newMensagens);
+
+    setSelectedOrcamento(null);
+    setOrcamentoToEdit(null);
+
+    if (!nextMode && targetId && isCloudSyncEnabled(targetPlano)) {
+      syncWithCloud(targetPlano, targetId);
+    }
+
+    addToast(
+      nextMode ? 'Modo Demonstração Ativado' : 'Retornado à Conta Real',
+      nextMode
+        ? 'Você está no modo de demonstração com dados de exemplo. Nenhuma alteração afetará sua conta.'
+        : 'Seus dados e plano reais foram restaurados com sucesso.',
+      'info'
+    );
+  };
+
+  // Restaura dados originais de exemplo para quem bagunçou o modo demonstração
+  const handleRestaurarExemploOriginal = () => {
+    resetDemoData();
+    setOrcamentos(loadUserOrcamentos(null));
+    setClientes(loadUserClientes(null));
+    setEmpresa(loadUserEmpresa(null));
+    setMensagens([]);
+    setSelectedOrcamento(null);
+    setOrcamentoToEdit(null);
+    addToast(
+      'Exemplo restaurado!',
+      'Os dados originais de demonstração foram restaurados com sucesso.',
+      'success'
+    );
+  };
 
   // WhatsApp Inbound Messages isolada no namespace da conta
   const [mensagens, setMensagens] = useState<MensagemWhatsApp[]>(() =>
@@ -121,11 +180,11 @@ export default function App() {
   }, []);
 
   const handleMigrateLegacy = () => {
-    const res = migrateLegacyDataToUser(currentUserId);
+    const res = migrateLegacyDataToUser(effectiveUserId);
     if (res.success) {
-      setOrcamentos(loadUserOrcamentos(currentUserId));
-      setClientes(loadUserClientes(currentUserId));
-      setEmpresa(loadUserEmpresa(currentUserId));
+      setOrcamentos(loadUserOrcamentos(effectiveUserId));
+      setClientes(loadUserClientes(effectiveUserId));
+      setEmpresa(loadUserEmpresa(effectiveUserId));
       addToast(
         'Dados importados!',
         `${res.migratedOrcamentos} orçamentos e ${res.migratedClientes} clientes foram importados com sucesso para esta conta.`,
@@ -142,13 +201,13 @@ export default function App() {
   };
 
   const unreadMensagensCount = useMemo(() => {
-    if (userPlano !== 'TURBO') return 0;
+    if (effectivePlano !== 'TURBO') return 0;
     return mensagens.filter((m) => !m.lida).length;
-  }, [mensagens, userPlano]);
+  }, [mensagens, effectivePlano]);
 
   const loadMensagens = async (targetUserId?: string | null) => {
-    const activeId = targetUserId !== undefined ? targetUserId : currentUserId;
-    if (userPlano === 'TURBO' && activeId) {
+    const activeId = targetUserId !== undefined ? targetUserId : effectiveUserId;
+    if (effectivePlano === 'TURBO' && activeId) {
       try {
         const msgs = await fetchMensagensWhatsApp(activeId);
         setMensagens(msgs);
@@ -162,7 +221,7 @@ export default function App() {
     setMensagens((prev) =>
       prev.map((m) => (m.id === id ? { ...m, lida: true } : m))
     );
-    await markMensagemAsRead(id, currentUserId);
+    await markMensagemAsRead(id, effectiveUserId);
   };
 
   // Selected items
@@ -174,31 +233,31 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [geminiOnline, setGeminiOnline] = useState<boolean>(true);
 
-  // Gravações estritamente no namespace do usuário ativo
+  // Gravações estritamente no namespace do usuário ativo (ou anônimo se modo demonstração)
   useEffect(() => {
-    saveUserOrcamentos(currentUserId, orcamentos);
-  }, [orcamentos, currentUserId]);
+    saveUserOrcamentos(effectiveUserId, orcamentos);
+  }, [orcamentos, effectiveUserId]);
 
   useEffect(() => {
-    saveUserClientes(currentUserId, clientes);
-  }, [clientes, currentUserId]);
+    saveUserClientes(effectiveUserId, clientes);
+  }, [clientes, effectiveUserId]);
 
   useEffect(() => {
-    saveUserEmpresa(currentUserId, empresa);
-  }, [empresa, currentUserId]);
+    saveUserEmpresa(effectiveUserId, empresa);
+  }, [empresa, effectiveUserId]);
 
   useEffect(() => {
-    saveUserMensagens(currentUserId, mensagens);
-  }, [mensagens, currentUserId]);
+    saveUserMensagens(effectiveUserId, mensagens);
+  }, [mensagens, effectiveUserId]);
 
   const syncWithCloud = async (plano: TipoPlano, targetUserId?: string | null) => {
-    if (!isCloudSyncEnabled(plano)) return;
-    const effectiveUserId = targetUserId || currentUserId;
-    if (!effectiveUserId) return; // Não sincroniza dados anônimos
+    if (modoDemonstracao || !isCloudSyncEnabled(plano)) return;
+    const targetEffectiveId = targetUserId || effectiveUserId;
+    if (!targetEffectiveId) return; // Não sincroniza dados anônimos
 
     try {
       // 1. Processa fila pendente offline do próprio usuário
-      await flushPendingSyncQueue(plano, effectiveUserId);
+      await flushPendingSyncQueue(plano, targetEffectiveId);
 
       // 2. Busca dados atualizados da nuvem no Supabase
       const cloud = await fetchCloudData(plano);
@@ -208,26 +267,26 @@ export default function App() {
           setOrcamentos((prev) => {
             const cloudIds = new Set(cloud.orcamentos.map((c) => c.id));
             const localOnly = prev.filter((p) => !cloudIds.has(p.id));
-            localOnly.forEach((o) => syncSaveOrcamento(o, plano, effectiveUserId));
+            localOnly.forEach((o) => syncSaveOrcamento(o, plano, targetEffectiveId));
             const merged = [...cloud.orcamentos, ...localOnly];
-            saveUserOrcamentos(effectiveUserId, merged);
+            saveUserOrcamentos(targetEffectiveId, merged);
             return merged;
           });
 
           setClientes((prev) => {
             const cloudIds = new Set(cloud.clientes.map((c) => c.id));
             const localOnly = prev.filter((p) => !cloudIds.has(p.id));
-            localOnly.forEach((c) => syncSaveCliente(c, plano, effectiveUserId));
+            localOnly.forEach((c) => syncSaveCliente(c, plano, targetEffectiveId));
             const merged = [...cloud.clientes, ...localOnly];
-            saveUserClientes(effectiveUserId, merged);
+            saveUserClientes(targetEffectiveId, merged);
             return merged;
           });
         } else {
           // Nuvem vazia: sobe dados do namespace deste usuário
-          const userLocalOrcamentos = loadUserOrcamentos(effectiveUserId);
-          const userLocalClientes = loadUserClientes(effectiveUserId);
-          userLocalOrcamentos.forEach((o) => syncSaveOrcamento(o, plano, effectiveUserId));
-          userLocalClientes.forEach((c) => syncSaveCliente(c, plano, effectiveUserId));
+          const userLocalOrcamentos = loadUserOrcamentos(targetEffectiveId);
+          const userLocalClientes = loadUserClientes(targetEffectiveId);
+          userLocalOrcamentos.forEach((o) => syncSaveOrcamento(o, plano, targetEffectiveId));
+          userLocalClientes.forEach((c) => syncSaveCliente(c, plano, targetEffectiveId));
         }
       }
     } catch (err) {
@@ -242,36 +301,40 @@ export default function App() {
       setCurrentUserId(newUserId);
       setUserPlano(data.user.plano);
 
-      // Carrega os dados EXCLUSIVAMENTE do namespace do novo usuário
-      const userOrcamentos = loadUserOrcamentos(newUserId);
-      const userClientes = loadUserClientes(newUserId);
-      const userEmpresa = loadUserEmpresa(newUserId);
-      const userMensagens = loadUserMensagens(newUserId);
+      // Se estiver em modo demonstração, mantém os dados de demonstração isolados na tela
+      if (!modoDemonstracao) {
+        const userOrcamentos = loadUserOrcamentos(newUserId);
+        const userClientes = loadUserClientes(newUserId);
+        const userEmpresa = loadUserEmpresa(newUserId);
+        const userMensagens = loadUserMensagens(newUserId);
 
-      setOrcamentos(userOrcamentos);
-      setClientes(userClientes);
-      setEmpresa(userEmpresa);
-      setMensagens(userMensagens);
+        setOrcamentos(userOrcamentos);
+        setClientes(userClientes);
+        setEmpresa(userEmpresa);
+        setMensagens(userMensagens);
 
-      setSelectedOrcamento(null);
-      setOrcamentoToEdit(null);
+        setSelectedOrcamento(null);
+        setOrcamentoToEdit(null);
 
-      if (isCloudSyncEnabled(data.user.plano) && newUserId) {
-        await syncWithCloud(data.user.plano, newUserId);
-      }
-      if (data.user.plano === 'TURBO' && newUserId) {
-        fetchMensagensWhatsApp(newUserId).then(setMensagens).catch(() => {});
+        if (isCloudSyncEnabled(data.user.plano) && newUserId) {
+          await syncWithCloud(data.user.plano, newUserId);
+        }
+        if (data.user.plano === 'TURBO' && newUserId) {
+          fetchMensagensWhatsApp(newUserId).then(setMensagens).catch(() => {});
+        }
       }
     } catch {
       // Visitante ou logout
       setCurrentUserId(null);
       setUserPlano('GRATUITO');
-      setOrcamentos(loadUserOrcamentos(null));
-      setClientes(loadUserClientes(null));
-      setEmpresa(loadUserEmpresa(null));
-      setMensagens([]);
-      setSelectedOrcamento(null);
-      setOrcamentoToEdit(null);
+      if (!modoDemonstracao) {
+        setOrcamentos(loadUserOrcamentos(null));
+        setClientes(loadUserClientes(null));
+        setEmpresa(loadUserEmpresa(null));
+        setMensagens([]);
+        setSelectedOrcamento(null);
+        setOrcamentoToEdit(null);
+      }
     }
   };
 
@@ -279,25 +342,25 @@ export default function App() {
     loadUserProfile();
   }, []);
 
-  // Polling de mensagens recebidas para plano TURBO
+  // Polling de mensagens recebidas para plano TURBO (bloqueado em modo demonstração)
   useEffect(() => {
-    if (userPlano === 'TURBO') {
+    if (effectivePlano === 'TURBO' && effectiveUserId) {
       loadMensagens();
       const interval = setInterval(loadMensagens, 20000);
       return () => clearInterval(interval);
     }
-  }, [userPlano]);
+  }, [effectivePlano, effectiveUserId]);
 
   // Listener para reprocessar fila quando a conexão cair e voltar
   useEffect(() => {
     const handleOnline = () => {
-      if (isCloudSyncEnabled(userPlano)) {
-        flushPendingSyncQueue(userPlano);
+      if (!modoDemonstracao && isCloudSyncEnabled(effectivePlano)) {
+        flushPendingSyncQueue(effectivePlano, effectiveUserId);
       }
     };
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
-  }, [userPlano]);
+  }, [modoDemonstracao, effectivePlano, effectiveUserId]);
 
   // Initial check of Gemini API Health (Server-side/Worker)
   useEffect(() => {
@@ -393,8 +456,8 @@ export default function App() {
     setOrcamentos((prev) => {
       const updatedList = prev.map((o) => (o.id === orcamentoId ? { ...o, status: newStatus } : o));
       const target = updatedList.find((o) => o.id === orcamentoId);
-      if (target && isCloudSyncEnabled(userPlano)) {
-        syncSaveOrcamento(target, userPlano, currentUserId);
+      if (target && isCloudSyncEnabled(effectivePlano)) {
+        syncSaveOrcamento(target, effectivePlano, effectiveUserId);
       }
       return updatedList;
     });
@@ -412,7 +475,7 @@ export default function App() {
     );
 
     // REGRA DE NEGÓCIO: GRATUITO possui limite estrito de 5 orçamentos/mês (filtro rápido de UX)
-    if (!isEditing && userPlano === 'GRATUITO' && orcamentosMes.length >= 5) {
+    if (!isEditing && effectivePlano === 'GRATUITO' && orcamentosMes.length >= 5) {
       addToast(
         'Limite de Orçamentos Atingido',
         'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados e sincronizar na nuvem.',
@@ -426,8 +489,8 @@ export default function App() {
       return;
     }
 
-    // Validação real de quota no servidor para plano GRATUITO (apenas na criação com usuário autenticado)
-    if (!isEditing && userPlano === 'GRATUITO' && currentUserId) {
+    // Validação real de quota no servidor para plano GRATUITO (apenas na criação com usuário autenticado fora do modo demonstração)
+    if (!isEditing && effectivePlano === 'GRATUITO' && effectiveUserId) {
       const quotaCheck = await checkAndConsumeGratuitoQuota();
       if (!quotaCheck.success && quotaCheck.quotaExceeded) {
         addToast(
@@ -447,8 +510,8 @@ export default function App() {
 
     if (newCliente) {
       setClientes((prev) => [newCliente, ...prev]);
-      if (isCloudSyncEnabled(userPlano)) {
-        syncSaveCliente(newCliente, userPlano, currentUserId);
+      if (isCloudSyncEnabled(effectivePlano)) {
+        syncSaveCliente(newCliente, effectivePlano, effectiveUserId);
       }
     }
 
@@ -461,8 +524,8 @@ export default function App() {
     });
 
     // Gravação na nuvem Supabase (PRO e TURBO)
-    if (isCloudSyncEnabled(userPlano)) {
-      syncSaveOrcamento(savedOrcamento, userPlano, currentUserId).then((res) => {
+    if (isCloudSyncEnabled(effectivePlano)) {
+      syncSaveOrcamento(savedOrcamento, effectivePlano, effectiveUserId).then((res) => {
         if (!res.success && res.errorCode === 'QUOTA_EXCEEDED') {
           addToast(
             'Limite de Orçamentos Atingido',
@@ -489,8 +552,8 @@ export default function App() {
   // Delete quote
   const handleDeleteOrcamento = (orcamentoId: string) => {
     setOrcamentos((prev) => prev.filter((o) => o.id !== orcamentoId));
-    if (isCloudSyncEnabled(userPlano)) {
-      syncDeleteOrcamento(orcamentoId, userPlano, currentUserId);
+    if (isCloudSyncEnabled(effectivePlano)) {
+      syncDeleteOrcamento(orcamentoId, effectivePlano, effectiveUserId);
     }
     addToast('Orçamento Excluído', 'O orçamento foi removido.', 'info');
   };
@@ -503,7 +566,7 @@ export default function App() {
     );
 
     // Validação preventiva rápida de quota para duplicação no plano GRATUITO (filtro de UX)
-    if (userPlano === 'GRATUITO' && orcamentosMes.length >= 5) {
+    if (effectivePlano === 'GRATUITO' && orcamentosMes.length >= 5) {
       addToast(
         'Limite de Orçamentos Atingido',
         'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados e sincronizar na nuvem.',
@@ -517,8 +580,8 @@ export default function App() {
       return;
     }
 
-    // Validação real de quota no servidor para plano GRATUITO (usuário autenticado)
-    if (userPlano === 'GRATUITO' && currentUserId) {
+    // Validação real de quota no servidor para plano GRATUITO (usuário autenticado fora do modo demonstração)
+    if (effectivePlano === 'GRATUITO' && effectiveUserId) {
       const quotaCheck = await checkAndConsumeGratuitoQuota();
       if (!quotaCheck.success && quotaCheck.quotaExceeded) {
         addToast(
@@ -545,8 +608,8 @@ export default function App() {
       dataCriacao: new Date().toISOString().split('T')[0],
     };
     setOrcamentos((prev) => [duplicated, ...prev]);
-    if (isCloudSyncEnabled(userPlano)) {
-      syncSaveOrcamento(duplicated, userPlano, currentUserId).then((res) => {
+    if (isCloudSyncEnabled(effectivePlano)) {
+      syncSaveOrcamento(duplicated, effectivePlano, effectiveUserId).then((res) => {
         if (!res.success && res.errorCode === 'QUOTA_EXCEEDED') {
           addToast(
             'Limite de Orçamentos Atingido',
@@ -578,16 +641,16 @@ export default function App() {
       }
       return [cliente, ...prev];
     });
-    if (isCloudSyncEnabled(userPlano)) {
-      syncSaveCliente(cliente, userPlano, currentUserId);
+    if (isCloudSyncEnabled(effectivePlano)) {
+      syncSaveCliente(cliente, effectivePlano, effectiveUserId);
     }
   };
 
   // Delete client
   const handleDeleteCliente = (clienteId: string) => {
     setClientes((prev) => prev.filter((c) => c.id !== clienteId));
-    if (isCloudSyncEnabled(userPlano)) {
-      syncDeleteCliente(clienteId, userPlano, currentUserId);
+    if (isCloudSyncEnabled(effectivePlano)) {
+      syncDeleteCliente(clienteId, effectivePlano, effectiveUserId);
     }
     addToast('Cliente Excluído', 'O cadastro do cliente foi removido.', 'info');
   };
@@ -626,6 +689,41 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-200">
+      {/* Banner Fixo de Modo Demonstração */}
+      {modoDemonstracao && (
+        <aside
+          aria-label="Aviso de Modo Demonstração"
+          className="sticky top-0 z-50 bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 text-slate-950 px-4 py-2.5 shadow-md border-b border-amber-600/80"
+        >
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded font-black text-[10px] tracking-wider uppercase bg-slate-950 text-amber-300 shrink-0">
+                MODO DEMONSTRAÇÃO
+              </span>
+              <span className="font-semibold text-slate-950">
+                Dados de exemplo, nada aqui é real. Suas alterações não afetam sua conta.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleRestaurarExemploOriginal}
+                className="px-2.5 py-1 rounded-md bg-amber-400/40 hover:bg-amber-400/60 text-slate-950 font-bold text-[11px] transition-colors cursor-pointer border border-amber-400/50"
+              >
+                Restaurar exemplo original
+              </button>
+              <button
+                type="button"
+                onClick={toggleModoDemonstracao}
+                className="px-3 py-1 rounded-md bg-slate-950 hover:bg-slate-900 text-white font-bold text-[11px] transition-colors cursor-pointer shadow-xs"
+              >
+                Sair da demonstração
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
+
       {/* Top Header */}
       <Topbar
         empresa={empresa}
@@ -637,7 +735,7 @@ export default function App() {
         onOpenConfig={() => setIsConfigOpen(true)}
         onOpenTutorial={() => setIsTutorialOpen(true)}
         onOpenPerfil={() => setIsPerfilOpen(true)}
-        userPlano={userPlano}
+        userPlano={effectivePlano}
         geminiOnline={geminiOnline}
         vencimentos={vencimentos}
         onOpenIAForOrcamento={handleOpenIAForOrcamento}
@@ -695,7 +793,7 @@ export default function App() {
           onOpenConfig={() => setIsConfigOpen(true)}
           onOpenTutorial={() => setIsTutorialOpen(true)}
           onOpenPerfil={() => setIsPerfilOpen(true)}
-          userPlano={userPlano}
+          userPlano={effectivePlano}
           pendentesCount={pendentesCount}
           unreadMensagensCount={unreadMensagensCount}
         />
@@ -713,7 +811,7 @@ export default function App() {
               onUpdateStatus={handleUpdateStatus}
               onShowToast={addToast}
               onOpenTutorial={() => setIsTutorialOpen(true)}
-              userPlano={userPlano}
+              userPlano={effectivePlano}
               onOpenPerfil={() => setIsPerfilOpen(true)}
             />
           )}
@@ -738,7 +836,7 @@ export default function App() {
               mensagens={mensagens}
               onMarkAsRead={handleMarkMensagemAsRead}
               onRefresh={loadMensagens}
-              userPlano={userPlano}
+              userPlano={effectivePlano}
               onOpenPerfil={() => setIsPerfilOpen(true)}
               orcamentos={orcamentos}
               onViewOrcamento={handleViewOrcamento}
@@ -782,7 +880,7 @@ export default function App() {
           }
         }}
         pendentesCount={pendentesCount}
-        userPlano={userPlano}
+        userPlano={effectivePlano}
         unreadMensagensCount={unreadMensagensCount}
       />
 
@@ -794,7 +892,7 @@ export default function App() {
         clientes={clientes}
         orcamentoToEdit={orcamentoToEdit}
         nextNumero={nextNumero}
-        userPlano={userPlano}
+        userPlano={effectivePlano}
         onShowToast={addToast}
         onOpenPerfil={() => setIsPerfilOpen(true)}
       />
@@ -807,7 +905,7 @@ export default function App() {
         onOpenIAForOrcamento={handleOpenIAForOrcamento}
         onUpdateStatus={handleUpdateStatus}
         onShowToast={addToast}
-        userPlano={userPlano}
+        userPlano={effectivePlano}
         onOpenPerfil={() => setIsPerfilOpen(true)}
       />
 
@@ -818,7 +916,7 @@ export default function App() {
         selectedOrcamentoId={selectedOrcamentoIdForIA}
         empresa={empresa}
         onShowToast={addToast}
-        userPlano={userPlano}
+        userPlano={effectivePlano}
         onOpenPerfil={() => setIsPerfilOpen(true)}
       />
 
@@ -830,7 +928,7 @@ export default function App() {
         onShowToast={addToast}
         onOpenTutorial={() => setIsTutorialOpen(true)}
         onOpenPerfil={() => setIsPerfilOpen(true)}
-        userPlano={userPlano}
+        userPlano={effectivePlano}
       />
 
       <ModalPerfilUsuario
@@ -838,6 +936,9 @@ export default function App() {
         onClose={() => setIsPerfilOpen(false)}
         onShowToast={addToast}
         onPlanChanged={loadUserProfile}
+        modoDemonstracao={modoDemonstracao}
+        onToggleModoDemonstracao={toggleModoDemonstracao}
+        onRestaurarExemploOriginal={handleRestaurarExemploOriginal}
       />
 
       <TutorialModal

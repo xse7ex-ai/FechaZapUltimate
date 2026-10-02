@@ -109,7 +109,27 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Verificação ou Criação do Stripe Customer
+    // 3. Verificação de Assinatura Ativa (evitar assinatura duplicada)
+    const { data: activeSub } = await supabaseAdmin
+      .from('subscriptions')
+      .select('id, status, stripe_customer_id')
+      .eq('user_id', user.id)
+      .in('status', ['active', 'grace_period'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (activeSub) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Você já tem uma assinatura ativa. Use 'Gerenciar assinatura' para trocar de plano.",
+        }),
+        { status: 409, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 4. Verificação ou Criação do Stripe Customer
     const { data: existingSub } = await supabaseAdmin
       .from('subscriptions')
       .select('stripe_customer_id')

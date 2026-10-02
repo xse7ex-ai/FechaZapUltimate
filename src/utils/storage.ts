@@ -283,3 +283,20 @@ export function dismissLegacyData(): void {
     // ignore
   }
 }
+
+/**
+ * Apaga as chaves de armazenamento do namespace anônimo/demonstração.
+ * Ao recarregar com userId = null, os dados originais (INITIAL_ORCAMENTOS, INITIAL_CLIENTES, INITIAL_EMPRESA_CONFIG)
+ * voltam a ser carregados puros.
+ */
+export function resetDemoData(): void {
+  try {
+    removeStorageItem(getUserStorageKey(null, 'orcamentos'));
+    removeStorageItem(getUserStorageKey(null, 'clientes'));
+    removeStorageItem(getUserStorageKey(null, 'empresa'));
+    removeStorageItem(getUserStorageKey(null, 'mensagens'));
+    removeStorageItem(getUserStorageKey(null, 'sync_queue'));
+  } catch (err) {
+    console.warn('[FechaZap Storage] Falha ao resetar dados de demonstração:', err);
+  }
+}

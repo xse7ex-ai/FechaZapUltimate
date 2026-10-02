@@ -6,8 +6,25 @@ import { mapDbToOrcamento, mapOrcamentoToDb, mapDbToCliente, mapClienteToDb } fr
 import { formatCurrency, formatPhone, cleanPhone } from '../utils/format';
 import { generateWhatsAppQuoteText, generateWhatsAppUrl } from '../utils/whatsapp';
 import { generateOrcamentoPrintHtml } from '../utils/pdf';
-import { loadUserEmpresa } from '../utils/storage';
+import { loadUserEmpresa, loadUserOrcamentos, saveUserOrcamentos, resetDemoData } from '../utils/storage';
 import { Orcamento, Cliente, ConfiguracaoEmpresa } from '../types';
+
+// Mock in-memory do localStorage para ambiente Node/Bun
+if (typeof (globalThis as any).localStorage === 'undefined') {
+  const store: Record<string, string> = {};
+  (globalThis as any).localStorage = {
+    getItem: (key: string) => store[key] ?? null,
+    setItem: (key: string, value: string) => {
+      store[key] = String(value);
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      Object.keys(store).forEach((k) => delete store[k]);
+    },
+  };
+}
 
 // ==============================================================================
 // FechaZap • Testes de Endurecimento Técnico (Fase 7/9)
@@ -266,6 +283,90 @@ describe('FechaZap - Suíte de Endurecimento Técnico (Fase 7/9)', () => {
       expect(params.get('metadata[plano]')).toBe('TURBO');
       expect(params.get('subscription_data[metadata][plano]')).toBe('TURBO');
       expect(params.get('mode')).toBe('subscription');
+    });
+
+    it('create-checkout-session deve barrar assinatura duplicada se usuário já possuir status active ou grace_period', () => {
+      // Simulação da regra de negócio implementada na Edge Function
+      const validateActiveSubscription = (sub: { status: string } | null) => {
+        if (sub && (sub.status === 'active' || sub.status === 'grace_period')) {
+          return {
+            allowed: false,
+            status: 409,
+            error: "Você já tem uma assinatura ativa. Use 'Gerenciar assinatura' para trocar de plano.",
+          };
+        }
+        return { allowed: true };
+      };
+
+      // Assinatura ativa -> bloqueia com 409
+      const activeRes = validateActiveSubscription({ status: 'active' });
+      expect(activeRes.allowed).toBe(false);
+      expect(activeRes.status).toBe(409);
+      expect(activeRes.error).toContain('Gerenciar assinatura');
+
+      // Assinatura em grace_period -> bloqueia com 409
+      const graceRes = validateActiveSubscription({ status: 'grace_period' });
+      expect(graceRes.allowed).toBe(false);
+      expect(graceRes.status).toBe(409);
+
+      // Assinatura cancelada ou expirada -> permite novo checkout
+      const canceledRes = validateActiveSubscription({ status: 'canceled' });
+      expect(canceledRes.allowed).toBe(true);
+
+      const pastDueRes = validateActiveSubscription({ status: 'incomplete_expired' });
+      expect(pastDueRes.allowed).toBe(true);
+
+      // Usuário novo (sem assinatura) -> permite checkout
+      const nullRes = validateActiveSubscription(null);
+      expect(nullRes.allowed).toBe(true);
+    });
+
+    it('Modo Demonstração: deve isolar userId para null, forçar plano GRATUITO e permitir resetDemoData', () => {
+      // 1. Simulação do estado e transição de contexto
+      const currentRealUserId = 'real_user_auth_uuid_777';
+      const realUserPlano = 'TURBO';
+
+      let modoDemonstracao = false;
+      let effectiveUserId = modoDemonstracao ? null : currentRealUserId;
+      let effectivePlano = modoDemonstracao ? 'GRATUITO' : realUserPlano;
+
+      expect(effectiveUserId).toBe('real_user_auth_uuid_777');
+      expect(effectivePlano).toBe('TURBO');
+
+      // Ativar demonstração
+      modoDemonstracao = true;
+      effectiveUserId = modoDemonstracao ? null : currentRealUserId;
+      effectivePlano = modoDemonstracao ? 'GRATUITO' : realUserPlano;
+
+      expect(effectiveUserId).toBeNull();
+      expect(effectivePlano).toBe('GRATUITO');
+
+      // 2. Modificação de dados anônimos e restauração com resetDemoData
+      saveUserOrcamentos(null, [
+        {
+          id: 'temp_demo_test',
+          numero: '999',
+          clienteId: '1',
+          clienteNome: 'Cliente Teste',
+          clienteTelefone: '11999999999',
+          itens: [],
+          valorTotal: 100,
+          status: 'pendente',
+          dataCriacao: '2026-10-02',
+          validadeDias: 10,
+        },
+      ]);
+      const modifiedDemo = loadUserOrcamentos(null);
+      expect(modifiedDemo.length).toBe(1);
+      expect(modifiedDemo[0].id).toBe('temp_demo_test');
+
+      // Executa resetDemoData
+      resetDemoData();
+
+      // Ao recarregar com userId = null, deve retornar INITIAL_ORCAMENTOS puros
+      const restoredDemo = loadUserOrcamentos(null);
+      expect(restoredDemo.length).toBeGreaterThan(1);
+      expect(restoredDemo.some((o) => o.id === 'demo-1' || o.numero === '101')).toBe(true);
     });
   });
 

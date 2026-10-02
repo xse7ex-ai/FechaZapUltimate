@@ -18,6 +18,7 @@ import {
   ShieldAlert,
   CreditCard,
   FileCheck,
+  RotateCcw,
 } from 'lucide-react';
 import { UserProfile, UserQuota } from '../types';
 import {
@@ -36,6 +37,9 @@ interface ModalPerfilUsuarioProps {
   onClose: () => void;
   onShowToast: (title: string, desc?: string, type?: 'success' | 'error' | 'info') => void;
   onPlanChanged?: () => void;
+  modoDemonstracao?: boolean;
+  onToggleModoDemonstracao?: () => void;
+  onRestaurarExemploOriginal?: () => void;
 }
 
 export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
@@ -43,6 +47,9 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
   onClose,
   onShowToast,
   onPlanChanged,
+  modoDemonstracao = false,
+  onToggleModoDemonstracao,
+  onRestaurarExemploOriginal,
 }) => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [quota, setQuota] = useState<UserQuota | null>(null);
@@ -192,9 +199,9 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
     onPlanChanged?.();
   };
 
-  const currentPlano = profile?.plano || 'GRATUITO';
-  const used = quota?.used || 0;
-  const limit = quota?.limit || 10;
+  const currentPlano = modoDemonstracao ? 'GRATUITO' : (profile?.plano || 'GRATUITO');
+  const used = modoDemonstracao ? 0 : (quota?.used || 0);
+  const limit = modoDemonstracao ? 10 : (quota?.limit || 10);
   const pct = Math.min(100, Math.round((used / limit) * 100));
 
   return (
@@ -211,13 +218,15 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <span>Minha Conta & Plano</span>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${
-                  currentPlano === 'TURBO'
+                  modoDemonstracao
+                    ? 'bg-amber-400 text-slate-950 font-bold'
+                    : currentPlano === 'TURBO'
                     ? 'bg-amber-400 text-slate-950'
                     : currentPlano === 'PRO'
                     ? 'bg-emerald-400 text-slate-950'
                     : 'bg-slate-700 text-slate-200'
                 }`}>
-                  {currentPlano}
+                  {modoDemonstracao ? 'DEMONSTRAÇÃO' : currentPlano}
                 </span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
@@ -388,6 +397,60 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
             )}
           </div>
 
+          {/* Card Modo Demonstração */}
+          <div className={`p-4 rounded-xl border space-y-3 transition-colors ${
+            modoDemonstracao
+              ? 'bg-amber-500/10 border-amber-400 dark:border-amber-600/80 ring-2 ring-amber-400/20'
+              : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Layers className={`w-4 h-4 ${modoDemonstracao ? 'text-amber-500' : 'text-slate-500'}`} />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
+                  {modoDemonstracao ? 'Modo Demonstração Ativo' : 'Modo Demonstração'}
+                </span>
+              </div>
+              {modoDemonstracao && (
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 uppercase tracking-wide">
+                  Dados Fictícios
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {modoDemonstracao
+                ? 'Você está visualizando orçamentos, clientes e empresa de teste. Entrar ou sair do modo demonstração não afeta os dados reais da sua conta.'
+                : 'Deseja testar ou demonstrar o FechaZap sem exibir suas informações e clientes reais? Ative o modo demonstração com dados de exemplo. Entrar e sair não afeta os dados reais da sua conta.'}
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={onToggleModoDemonstracao}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  modoDemonstracao
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
+                    : 'bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white'
+                }`}
+              >
+                <ArrowRight className="w-3.5 h-3.5" />
+                <span>{modoDemonstracao ? 'Voltar para minha conta' : 'Ver modo demonstração'}</span>
+              </button>
+
+              {modoDemonstracao && onRestaurarExemploOriginal && (
+                <button
+                  type="button"
+                  onClick={onRestaurarExemploOriginal}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 transition-colors cursor-pointer flex items-center gap-1.5"
+                  title="Restaura os orçamentos e clientes de teste originais"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Restaurar exemplo original</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Valor Real & Posicionamento */}
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-2">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
@@ -424,8 +487,8 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
               </span>
             </div>
 
-            {/* Banner de Gerenciamento de Assinatura (exclusivo para PRO e TURBO) */}
-            {(currentPlano === 'PRO' || currentPlano === 'TURBO') && (
+            {/* Banner de Gerenciamento de Assinatura (exclusivo para PRO e TURBO e quando não em demonstração) */}
+            {(currentPlano === 'PRO' || currentPlano === 'TURBO') && !modoDemonstracao && (
               <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-950/40 dark:to-slate-800/80 border border-emerald-200 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
@@ -496,7 +559,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-750">
                   {currentPlano === 'GRATUITO' ? (
                     <span className="block w-full text-[11px] font-bold text-emerald-600 dark:text-emerald-400 text-center py-1.5 bg-emerald-100 dark:bg-emerald-950/60 rounded-lg">
-                      Plano Atual
+                      {modoDemonstracao ? 'Simulado (Demonstração)' : 'Plano Atual'}
                     </span>
                   ) : (
                     <span className="block w-full text-[11px] text-center text-slate-400 py-1.5">
@@ -508,7 +571,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
 
               {/* PRO */}
               <div className={`p-4 rounded-xl border flex flex-col justify-between ${
-                currentPlano === 'PRO'
+                currentPlano === 'PRO' && !modoDemonstracao
                   ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/20 dark:bg-slate-800/90'
                   : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850'
               }`}>
@@ -547,7 +610,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-750">
-                  {currentPlano === 'PRO' ? (
+                  {currentPlano === 'PRO' && !modoDemonstracao ? (
                     <div className="space-y-1.5">
                       <span className="block w-full text-[11px] font-bold text-emerald-600 dark:text-emerald-400 text-center py-1 bg-emerald-100 dark:bg-emerald-950/60 rounded-lg">
                         Plano Atual
@@ -563,22 +626,34 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleStartCheckout('PRO')}
-                      disabled={startingCheckout === 'PRO'}
-                      className="w-full py-1.5 px-3 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
-                    >
-                      <CreditCard className="w-3.5 h-3.5" />
-                      <span>{startingCheckout === 'PRO' ? 'Processando...' : 'Assinar PRO'}</span>
-                    </button>
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => handleStartCheckout('PRO')}
+                        disabled={startingCheckout === 'PRO' || modoDemonstracao}
+                        title={modoDemonstracao ? 'Indisponível em modo demonstração' : undefined}
+                        className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 ${
+                          modoDemonstracao
+                            ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer disabled:opacity-50'
+                        }`}
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        <span>{modoDemonstracao ? 'Indisponível em Demo' : startingCheckout === 'PRO' ? 'Processando...' : 'Assinar PRO'}</span>
+                      </button>
+                      {modoDemonstracao && (
+                        <p className="text-[10px] text-center text-amber-600 dark:text-amber-400 font-medium">
+                          Indisponível em demonstração
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
 
               {/* TURBO */}
               <div className={`p-4 rounded-xl border flex flex-col justify-between ${
-                currentPlano === 'TURBO'
+                currentPlano === 'TURBO' && !modoDemonstracao
                   ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/20 dark:bg-slate-800/90'
                   : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850'
               }`}>
@@ -621,7 +696,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-750">
-                  {currentPlano === 'TURBO' ? (
+                  {currentPlano === 'TURBO' && !modoDemonstracao ? (
                     <div className="space-y-1.5">
                       <span className="block w-full text-[11px] font-bold text-amber-600 dark:text-amber-400 text-center py-1 bg-amber-100 dark:bg-amber-950/60 rounded-lg">
                         Plano Atual
@@ -637,15 +712,27 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleStartCheckout('TURBO')}
-                      disabled={startingCheckout === 'TURBO'}
-                      className="w-full py-1.5 px-3 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer disabled:opacity-50"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>{startingCheckout === 'TURBO' ? 'Processando...' : 'Assinar TURBO'}</span>
-                    </button>
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => handleStartCheckout('TURBO')}
+                        disabled={startingCheckout === 'TURBO' || modoDemonstracao}
+                        title={modoDemonstracao ? 'Indisponível em modo demonstração' : undefined}
+                        className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 shadow-xs ${
+                          modoDemonstracao
+                            ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                            : 'bg-amber-500 hover:bg-amber-600 text-slate-950 cursor-pointer disabled:opacity-50'
+                        }`}
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>{modoDemonstracao ? 'Indisponível em Demo' : startingCheckout === 'TURBO' ? 'Processando...' : 'Assinar TURBO'}</span>
+                      </button>
+                      {modoDemonstracao && (
+                        <p className="text-[10px] text-center text-amber-600 dark:text-amber-400 font-medium">
+                          Indisponível em demonstração
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
