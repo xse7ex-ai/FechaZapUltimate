@@ -20,6 +20,7 @@ import {
   Smartphone,
   Unlink,
   Link2,
+  ExternalLink,
 } from 'lucide-react';
 import { ConfiguracaoEmpresa, WhatsAppConnection } from '../types';
 import { testarConexaoGemini, GeminiStatusResult } from '../utils/ai';
@@ -480,6 +481,26 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
                     onChange={(e) => setWabaIdInput(e.target.value)}
                     className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
                   />
+                </div>
+
+                {/* Link de Apoio: Criar Conta Meta Business */}
+                <div className="p-2.5 rounded-lg bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 text-[11px] text-slate-700 dark:text-slate-300 space-y-1">
+                  <div className="flex flex-wrap items-center gap-1.5 font-medium text-blue-950 dark:text-blue-200">
+                    <Info className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span>Ainda não tem uma conta comercial da Meta?</span>
+                    <a
+                      href="https://business.facebook.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline underline-offset-2"
+                    >
+                      Criar conta
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Depois de criar sua conta no gerenciador da Meta, volte aqui e preencha os campos acima com as informações geradas lá.
+                  </p>
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-1">
