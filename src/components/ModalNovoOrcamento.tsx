@@ -35,6 +35,13 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
   const [aiPrompt, setAiPrompt] = useState<string>('');
   const [loadingAi, setLoadingAi] = useState<boolean>(false);
   const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [aiSuggestions, setAiSuggestions] = useState<{
+    etapas?: string[];
+    materiais?: string[];
+    itensEsquecidos?: string[];
+    perguntas?: string[];
+    avisoPreco?: string;
+  } | null>(null);
   
   // Novo cliente inline
   const [novoNome, setNovoNome] = useState<string>('');
@@ -56,6 +63,10 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
   const [observacoes, setObservacoes] = useState<string>('');
   const [termosGarantia, setTermosGarantia] = useState<string>('Garantia de 90 dias conforme código de defesa do consumidor.');
 
+  // Autosave Draft Key
+  const DRAFT_KEY = 'fechazap_draft_orcamento_v1';
+  const [hasDraftRestored, setHasDraftRestored] = useState<boolean>(false);
+
   useEffect(() => {
     if (orcamentoToEdit) {
       setSelectedClienteId(orcamentoToEdit.clienteId);
@@ -68,7 +79,40 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
       setDataValidade(orcamentoToEdit.dataValidade || '');
       setObservacoes(orcamentoToEdit.observacoes || '');
       setTermosGarantia(orcamentoToEdit.termosGarantia || '');
-    } else {
+      setHasDraftRestored(false);
+    } else if (isOpen) {
+      // Verifica se há rascunho salvo anteriormente
+      try {
+        const rawDraft = localStorage.getItem(DRAFT_KEY);
+        if (rawDraft) {
+          const draft = JSON.parse(rawDraft);
+          if (
+            (Array.isArray(draft.itens) && draft.itens.some((i: Partial<ItemOrcamento>) => i.descricao?.trim())) ||
+            draft.novoNome?.trim() ||
+            draft.observacoes?.trim()
+          ) {
+            setClienteMode(draft.clienteMode || 'existente');
+            if (draft.selectedClienteId) setSelectedClienteId(draft.selectedClienteId);
+            if (draft.novoNome) setNovoNome(draft.novoNome);
+            if (draft.novoTelefone) setNovoTelefone(draft.novoTelefone);
+            if (draft.novoEmail) setNovoEmail(draft.novoEmail);
+            if (draft.novaCidade) setNovaCidade(draft.novaCidade);
+            if (Array.isArray(draft.itens) && draft.itens.length > 0) setItens(draft.itens);
+            if (draft.descontoTipo) setDescontoTipo(draft.descontoTipo);
+            if (typeof draft.descontoValor === 'number') setDescontoValor(draft.descontoValor);
+            if (draft.formaPagamento) setFormaPagamento(draft.formaPagamento);
+            if (draft.prazoEntrega) setPrazoEntrega(draft.prazoEntrega);
+            if (draft.dataValidade) setDataValidade(draft.dataValidade);
+            if (draft.observacoes) setObservacoes(draft.observacoes);
+            if (draft.termosGarantia) setTermosGarantia(draft.termosGarantia);
+            setHasDraftRestored(true);
+            return;
+          }
+        }
+      } catch {
+        // ignore draft parse error
+      }
+
       // Default new quote
       if (clientes.length > 0) {
         setSelectedClienteId(clientes[0].id);
@@ -79,8 +123,84 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
       setItens([{ id: '1', descricao: '', quantidade: 1, valorUnitario: 0, total: 0 }]);
       setDescontoValor(0);
       setObservacoes('');
+      setHasDraftRestored(false);
     }
   }, [orcamentoToEdit, isOpen, clientes]);
+
+  // Autosave contínuo para propostas novas
+  useEffect(() => {
+    if (!isOpen || orcamentoToEdit) return;
+    const timer = setTimeout(() => {
+      try {
+        const hasContent =
+          itens.some((i) => i.descricao.trim().length > 0) ||
+          novoNome.trim().length > 0 ||
+          observacoes.trim().length > 0;
+
+        if (hasContent) {
+          const draftPayload = {
+            clienteMode,
+            selectedClienteId,
+            novoNome,
+            novoTelefone,
+            novoEmail,
+            novaCidade,
+            itens,
+            descontoTipo,
+            descontoValor,
+            formaPagamento,
+            prazoEntrega,
+            dataValidade,
+            observacoes,
+            termosGarantia,
+          };
+          localStorage.setItem(DRAFT_KEY, JSON.stringify(draftPayload));
+        }
+      } catch {
+        // ignore
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [
+    isOpen,
+    orcamentoToEdit,
+    clienteMode,
+    selectedClienteId,
+    novoNome,
+    novoTelefone,
+    novoEmail,
+    novaCidade,
+    itens,
+    descontoTipo,
+    descontoValor,
+    formaPagamento,
+    prazoEntrega,
+    dataValidade,
+    observacoes,
+    termosGarantia,
+  ]);
+
+  const handleClearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {}
+    setHasDraftRestored(false);
+    if (clientes.length > 0) {
+      setSelectedClienteId(clientes[0].id);
+    }
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    setDataValidade(d.toISOString().split('T')[0]);
+    setItens([{ id: '1', descricao: '', quantidade: 1, valorUnitario: 0, total: 0 }]);
+    setDescontoValor(0);
+    setObservacoes('');
+    setNovoNome('');
+    setNovoTelefone('');
+    setNovoEmail('');
+    setNovaCidade('');
+    onShowToast?.('Rascunho descartado', 'O formulário foi reiniciado com valores padrão.', 'info');
+  };
 
   if (!isOpen) return null;
 
@@ -92,7 +212,7 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
       : (descontoValor || 0);
   const valorTotal = Math.max(0, subtotal - descontoCalculado);
 
-  const handleItemChange = (index: number, field: keyof ItemOrcamento, value: any) => {
+  const handleItemChange = (index: number, field: keyof ItemOrcamento, value: string | number) => {
     const updated = [...itens];
     const item = { ...updated[index] };
     if (field === 'quantidade') {
@@ -136,7 +256,7 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
 
     if (clienteMode === 'novo') {
       if (!novoNome.trim()) {
-        alert('Informe o nome do novo cliente.');
+        onShowToast?.('Nome obrigatório', 'Informe o nome do novo cliente para gerar a proposta.', 'error');
         return;
       }
       const newId = generateUUID();
@@ -156,7 +276,7 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
     } else {
       const selected = clientes.find((c) => c.id === selectedClienteId);
       if (!selected) {
-        alert('Selecione um cliente válido.');
+        onShowToast?.('Cliente não selecionado', 'Selecione um cliente cadastrado ou clique em "Novo Cliente".', 'error');
         return;
       }
       clienteFinalNome = selected.nome;
@@ -184,6 +304,11 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
       observacoes,
       termosGarantia,
     };
+
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {}
+    setHasDraftRestored(false);
 
     onSave(orcamentoSalvo, novoClienteCriado);
     onClose();
@@ -258,7 +383,17 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
         if (res.clienteTelefone) setNovoTelefone(res.clienteTelefone);
       }
 
-      onShowToast?.('Orçamento Criado com IA!', 'Itens e valores extraídos com sucesso.', 'success');
+      if (res.etapas?.length || res.materiaisSugeridos?.length || res.itensEsquecidos?.length || res.perguntasAlinhamento?.length) {
+        setAiSuggestions({
+          etapas: res.etapas,
+          materiais: res.materiaisSugeridos,
+          itensEsquecidos: res.itensEsquecidos,
+          perguntas: res.perguntasAlinhamento,
+          avisoPreco: res.avisoPreco,
+        });
+      }
+
+      onShowToast?.('Orçamento Criado com IA!', 'Itens e sugestões comerciais gerados com sucesso.', 'success');
       setAiPrompt('');
     } catch (err: any) {
       onShowToast?.('Aviso de IA', err?.message || 'Falha ao processar orçamento.', 'error');
@@ -268,13 +403,18 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-novo-orcamento-title"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+    >
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-slate-800 dark:text-slate-100">
         
         {/* Header */}
         <div className="bg-slate-900 p-4 sm:p-5 text-white flex items-center justify-between shrink-0 border-b border-slate-800">
           <div>
-            <h3 className="font-bold text-lg">
+            <h3 id="modal-novo-orcamento-title" className="font-bold text-lg">
               {orcamentoToEdit ? `Editar Orçamento #${orcamentoToEdit.numero}` : `Novo Orçamento #${nextNumero}`}
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -282,12 +422,31 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            aria-label="Fechar formulário de orçamento"
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Banner de Rascunho Recuperado Automaticamente */}
+        {hasDraftRestored && !orcamentoToEdit && (
+          <div className="bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-800/50 px-4 py-2.5 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span><strong>Rascunho recuperado:</strong> seus dados não salvos foram restaurados automaticamente.</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearDraft}
+              className="text-emerald-700 dark:text-emerald-400 underline font-semibold hover:text-emerald-900 dark:hover:text-emerald-200 cursor-pointer ml-3 shrink-0"
+            >
+              Descartar rascunho
+            </button>
+          </div>
+        )}
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
@@ -342,6 +501,56 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                 <span>{loadingAi ? 'Criando...' : 'Gerar com IA'}</span>
               </button>
             </div>
+
+            {/* Sugestões do Copiloto (Etapas, Materiais, Perguntas, Itens Esquecidos) */}
+            {aiSuggestions && (
+              <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-800 text-xs space-y-2.5 animate-in fade-in">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>Sugestões Estratégicas do Copiloto</span>
+                  </span>
+                  <span className="text-[10px] bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded font-semibold border border-amber-200 dark:border-amber-800">
+                    {aiSuggestions.avisoPreco || 'Valor sugerido pela IA. Revise antes de enviar.'}
+                  </span>
+                </div>
+
+                {aiSuggestions.etapas && aiSuggestions.etapas.length > 0 && (
+                  <div>
+                    <strong className="text-slate-700 dark:text-slate-300 text-[11px] block">Etapas e execução recomendadas:</strong>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {aiSuggestions.etapas.map((etapa, idx) => (
+                        <span key={idx} className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-750 text-slate-700 dark:text-slate-300 text-[11px]">
+                          {etapa}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {aiSuggestions.itensEsquecidos && aiSuggestions.itensEsquecidos.length > 0 && (
+                  <div className="text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-800/50">
+                    <strong className="text-[11px] block mb-0.5">Pontos de atenção / Itens comumente esquecidos:</strong>
+                    <ul className="list-disc list-inside text-[11px] space-y-0.5">
+                      {aiSuggestions.itensEsquecidos.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {aiSuggestions.perguntas && aiSuggestions.perguntas.length > 0 && (
+                  <div>
+                    <strong className="text-slate-700 dark:text-slate-300 text-[11px] block mb-0.5">Perguntas úteis para alinhar com o cliente:</strong>
+                    <ul className="list-disc list-inside text-slate-600 dark:text-slate-400 text-[11px] space-y-0.5">
+                      {aiSuggestions.perguntas.map((q, idx) => (
+                        <li key={idx}>{q}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           
           {/* CLIENTE SECTION */}
@@ -548,7 +757,7 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                 <div className="flex">
                   <select
                     value={descontoTipo}
-                    onChange={(e) => setDescontoTipo(e.target.value as any)}
+                    onChange={(e) => setDescontoTipo(e.target.value as 'porcentagem' | 'valor')}
                     className="bg-white dark:bg-slate-850 border border-r-0 border-slate-300 dark:border-slate-700 rounded-l-lg px-2 py-1.5 text-xs text-slate-700 dark:text-slate-300"
                   >
                     <option value="valor">R$ Fixo</option>
@@ -641,13 +850,13 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="px-5 py-2.5 min-h-[44px] rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center justify-center"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white dark:text-slate-950 shadow-md shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer"
+              className="px-6 py-2.5 min-h-[44px] rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white dark:text-slate-950 shadow-md shadow-emerald-600/30 transition-all active:scale-95 cursor-pointer flex items-center justify-center"
             >
               Salvar Orçamento
             </button>

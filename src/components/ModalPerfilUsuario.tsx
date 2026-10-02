@@ -13,6 +13,11 @@ import {
   Database,
   Layers,
   ArrowRight,
+  Clock,
+  TrendingUp,
+  ShieldAlert,
+  CreditCard,
+  FileCheck,
 } from 'lucide-react';
 import { UserProfile, UserQuota } from '../types';
 import {
@@ -21,6 +26,7 @@ import {
   registerWithEmail,
   logoutUser,
   isSupabaseConfigured,
+  attemptClientSidePlanChange,
 } from '../utils/supabase';
 
 interface ModalPerfilUsuarioProps {
@@ -47,6 +53,13 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
   const [password, setPassword] = useState<string>('');
   const [nome, setNome] = useState<string>('');
 
+  // Security test state
+  const [testingSecurity, setTestingSecurity] = useState<boolean>(false);
+  const [securityReport, setSecurityReport] = useState<{
+    status: 'neutral' | 'blocked' | 'error';
+    message: string;
+  } | null>(null);
+
   const loadData = async () => {
     try {
       const data = await fetchServerUserProfileAndQuota();
@@ -55,6 +68,33 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
       setIsAuthenticated(data.authenticated);
     } catch {
       // ignore
+    }
+  };
+
+  const handleTestSecurityAttempt = async () => {
+    setTestingSecurity(true);
+    setSecurityReport(null);
+    try {
+      const res = await attemptClientSidePlanChange('TURBO');
+      if (!res.success) {
+        setSecurityReport({
+          status: 'blocked',
+          message: res.error || 'Acesso negado: O banco de dados rejeitou a alteração de plano pelo cliente.',
+        });
+        onShowToast('Proteção Ativa!', 'O backend PostgreSQL impediu a alteração indevida de plano.', 'success');
+      } else {
+        setSecurityReport({
+          status: 'neutral',
+          message: `Plano atual: ${res.effectivePlan}.`,
+        });
+      }
+    } catch (err: any) {
+      setSecurityReport({
+        status: 'error',
+        message: err?.message || 'Falha ao executar teste.',
+      });
+    } finally {
+      setTestingSecurity(false);
     }
   };
 
@@ -299,126 +339,263 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
             )}
           </div>
 
+          {/* Valor Real & Posicionamento */}
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+              <TrendingUp className="w-4 h-4 text-emerald-500" />
+              <span>Investimento Focado em Retorno Real</span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              No FechaZap você investe em <strong>economia de tempo</strong>, <strong>organização</strong> e <strong>inteligência comercial</strong> — sem pegadinhas ou limitações artificiais irritantes.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1 text-[11px]">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-medium border border-emerald-500/20">
+                <Clock className="w-3 h-3" /> Economia de 4-6h/semana
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 font-medium border border-blue-500/20">
+                <FileCheck className="w-3 h-3" /> Propostas Profissionais
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium border border-amber-500/20">
+                <Zap className="w-3 h-3" /> Fechamento Acelerado
+              </span>
+            </div>
+          </div>
+
           {/* Comparativo de Planos */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Crown className="w-4 h-4 text-amber-500" />
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
-                Planos Disponíveis no FechaZap
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Crown className="w-4 h-4 text-amber-500" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
+                  Planos Disponíveis no FechaZap
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Cobrança segura via Stripe
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* GRATUITO */}
-              <div className={`p-3.5 rounded-xl border flex flex-col justify-between ${
+              <div className={`p-4 rounded-xl border flex flex-col justify-between ${
                 currentPlano === 'GRATUITO'
-                  ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/30 dark:bg-slate-800/90'
+                  ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/20 dark:bg-slate-800/90'
                   : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850'
               }`}>
-                 <div>
-                   <div className="font-bold text-xs">GRATUITO</div>
-                   <div className="text-lg font-black text-slate-900 dark:text-slate-100 mt-1">R$ 0</div>
-                   <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5 mt-3">
-                     <li className="flex items-center gap-1.5">
-                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                       <span>5 orçamentos manuais / mês</span>
-                     </li>
-                     <li className="flex items-center gap-1.5">
-                       <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                       <span>100% local no dispositivo</span>
-                     </li>
-                     <li className="flex items-center gap-1.5">
-                       <CheckCircle2 className="w-3 h-3 text-slate-400 shrink-0" />
-                       <span>0 créditos de IA</span>
-                     </li>
-                     <li className="flex items-center gap-1.5">
-                       <CheckCircle2 className="w-3 h-3 text-slate-400 shrink-0" />
-                       <span>Exibe anúncios parceiros</span>
-                     </li>
-                   </ul>
-                 </div>
-                {currentPlano === 'GRATUITO' && (
-                  <span className="mt-3 text-[10px] font-bold text-emerald-600 text-center py-1 bg-emerald-100 dark:bg-emerald-950 rounded-lg">
-                    Plano Atual
-                  </span>
-                )}
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-xs uppercase tracking-wide">GRATUITO</div>
+                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-750 text-slate-600 dark:text-slate-300">
+                      Experimentar
+                    </span>
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-2">
+                    R$ 0
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    Para quem está começando e quer testar a criação rápida de orçamentos.
+                  </p>
+
+                  <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-750">
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      <span><strong>5 orçamentos</strong> por mês</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      <span>Gestão básica de clientes</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      <span>Envio manual via WhatsApp</span>
+                    </li>
+                    <li className="flex items-start gap-1.5 text-slate-400">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                      <span>0 créditos de IA no backend</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-750">
+                  {currentPlano === 'GRATUITO' ? (
+                    <span className="block w-full text-[11px] font-bold text-emerald-600 dark:text-emerald-400 text-center py-1.5 bg-emerald-100 dark:bg-emerald-950/60 rounded-lg">
+                      Plano Atual
+                    </span>
+                  ) : (
+                    <span className="block w-full text-[11px] text-center text-slate-400 py-1.5">
+                      Plano de Entrada
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* PRO */}
-              <div className={`p-3.5 rounded-xl border flex flex-col justify-between ${
+              <div className={`p-4 rounded-xl border flex flex-col justify-between ${
                 currentPlano === 'PRO'
-                  ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/30 dark:bg-slate-800/90'
+                  ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/20 dark:bg-slate-800/90'
                   : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850'
               }`}>
                 <div>
-                  <div className="font-bold text-xs text-emerald-600 dark:text-emerald-400">PRO</div>
-                  <div className="text-lg font-black text-slate-900 dark:text-slate-100 mt-1">R$ 49<span className="text-xs font-normal text-slate-400">/mês</span></div>
-                  <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5 mt-3">
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-xs uppercase tracking-wide text-emerald-600 dark:text-emerald-400">PRO</div>
+                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                      Uso Profissional
+                    </span>
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-2">
+                    R$ 49<span className="text-xs font-normal text-slate-400">/mês</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    Para autônomos e prestadores que vivem do seu trabalho e precisam de agilidade.
+                  </p>
+
+                  <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-750">
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                       <span><strong>Orçamentos Ilimitados</strong></span>
                     </li>
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span><strong>Sincronização na Nuvem</strong> (Supabase)</span>
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      <span><strong>Sincronização Nuvem</strong> (Supabase RLS)</span>
                     </li>
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span><strong>Exportação PDF</strong> com Logo e PIX</span>
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      <span><strong>PDF Profissional</strong> com Logo e PIX</span>
                     </li>
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Sem anúncios / 0 créditos IA</span>
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      <span>Sem anúncios / 100% focado</span>
                     </li>
                   </ul>
                 </div>
-                {currentPlano === 'PRO' && (
-                  <span className="mt-3 text-[10px] font-bold text-emerald-600 text-center py-1 bg-emerald-100 dark:bg-emerald-950 rounded-lg">
-                    Plano Atual
-                  </span>
-                )}
+
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-750">
+                  {currentPlano === 'PRO' ? (
+                    <span className="block w-full text-[11px] font-bold text-emerald-600 dark:text-emerald-400 text-center py-1.5 bg-emerald-100 dark:bg-emerald-950/60 rounded-lg">
+                      Plano Atual
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => onShowToast('Assinatura PRO', 'A cobrança oficial será processada via Stripe Checkout com ativação automática por webhook seguro.', 'info')}
+                      className="w-full py-1.5 px-3 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center justify-center gap-1"
+                    >
+                      <CreditCard className="w-3.5 h-3.5" />
+                      <span>Escolher PRO</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* TURBO */}
-              <div className={`p-3.5 rounded-xl border flex flex-col justify-between ${
+              <div className={`p-4 rounded-xl border flex flex-col justify-between ${
                 currentPlano === 'TURBO'
-                  ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/30 dark:bg-slate-800/90'
+                  ? 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50/20 dark:bg-slate-800/90'
                   : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-850'
               }`}>
                 <div>
-                  <div className="font-bold text-xs text-amber-500">TURBO</div>
-                  <div className="text-lg font-black text-slate-900 dark:text-slate-100 mt-1">R$ 97<span className="text-xs font-normal text-slate-400">/mês</span></div>
-                  <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5 mt-3">
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-xs uppercase tracking-wide text-amber-500">TURBO</div>
+                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">
+                      Produtividade + IA
+                    </span>
+                  </div>
+                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-2">
+                    R$ 97<span className="text-xs font-normal text-slate-400">/mês</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    Copiloto comercial inteligente para fechar mais propostas e economizar horas.
+                  </p>
+
+                  <ul className="text-[11px] text-slate-600 dark:text-slate-400 space-y-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-750">
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                       <span><strong>Tudo do plano PRO</strong></span>
                     </li>
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span><strong>1.500 IA</strong> / mês (Gemini 3.8)</span>
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      <span><strong>1.500 IA/mês</strong> (Google Gemini 3.8)</span>
                     </li>
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Follow-up Automático WhatsApp</span>
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      <span><strong>Follow-up WhatsApp</strong> inteligente</span>
                     </li>
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Criação de Propostas por Voz e Texto</span>
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      <span>Orçamentos por voz e áudio em 10s</span>
                     </li>
-                    <li className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                      <span>Análise Inteligente de Preços</span>
+                    <li className="flex items-start gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                      <span>Gatilhos persuasivos de fechamento</span>
                     </li>
                   </ul>
                 </div>
-                {currentPlano === 'TURBO' && (
-                  <span className="mt-3 text-[10px] font-bold text-amber-600 text-center py-1 bg-amber-100 dark:bg-amber-950 rounded-lg">
-                    Plano Atual
-                  </span>
-                )}
+
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-750">
+                  {currentPlano === 'TURBO' ? (
+                    <span className="block w-full text-[11px] font-bold text-amber-600 dark:text-amber-400 text-center py-1.5 bg-amber-100 dark:bg-amber-950/60 rounded-lg">
+                      Plano Atual
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => onShowToast('Assinatura TURBO', 'A ativação do plano TURBO é autorizada exclusivamente via Stripe Webhook seguro com sincronização imediata no Supabase.', 'info')}
+                      className="w-full py-1.5 px-3 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 transition-colors flex items-center justify-center gap-1 shadow-xs"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Escolher TURBO</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Teste de Segurança Anti-Tampering (Backend Enforcement) */}
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
+                  Segurança do Servidor: Anti-Tampering
+                </span>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                PostgreSQL RLS + Webhooks
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              O FechaZap adota o princípio de segurança <em>Zero Trust</em> no frontend. Qualquer tentativa do navegador de falsificar o plano é estritamente bloqueada pelo banco de dados PostgreSQL.
+            </p>
+
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="button"
+                disabled={testingSecurity || !isAuthenticated}
+                onClick={handleTestSecurityAttempt}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-700 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                <span>{testingSecurity ? 'Verificando...' : 'Testar Tentativa de Alteração pelo Frontend'}</span>
+              </button>
+
+              {!isAuthenticated && (
+                <span className="text-[11px] text-slate-400">
+                  (Faça login para executar a simulação de segurança no PostgreSQL)
+                </span>
+              )}
+            </div>
+
+            {securityReport && (
+              <div className={`p-3 rounded-lg text-xs font-mono border ${
+                securityReport.status === 'blocked'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+                  : 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200'
+              }`}>
+                {securityReport.message}
+              </div>
+            )}
+          </div>
+
 
         </div>
 

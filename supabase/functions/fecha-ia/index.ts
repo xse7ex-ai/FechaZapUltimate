@@ -7,7 +7,7 @@
 //   - Validação estrita do JSON retornado pelo Gemini
 //   - Tenant Isolation rigoroso na consulta de histórico e orçamentos
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { getCorsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 interface GeminiResponse {
@@ -16,11 +16,17 @@ interface GeminiResponse {
   usage?: any;
 }
 
-const SUPPORTED_ACTIONS = ['gerar_orcamento', 'analisar_precos', 'gerar_fechamento', 'follow_up'] as const;
+const SUPPORTED_ACTIONS = [
+  'gerar_orcamento',
+  'analisar_precos',
+  'gerar_fechamento',
+  'follow_up',
+  'test_connection',
+] as const;
 type ActionType = typeof SUPPORTED_ACTIONS[number];
 
 /**
- * Chamada à API oficial do Google Gemini com timeout e tratamento de erros
+ * Chamada à API oficial do Google Gemini com timeout (20s), retry inteligente e tratamento de erros
  */
 async function callGemini(
   apiKey: string,
@@ -30,6 +36,10 @@ async function callGemini(
 ): Promise<GeminiResponse> {
   const model = 'gemini-3.8-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  if (prompt.length > 4000) {
+    throw new Error('Entrada excede o limite máximo permitido de 4.000 caracteres.');
+  }
 
   const bodyPayload: any = {
     contents: [
@@ -50,49 +60,67 @@ async function callGemini(
     };
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(bodyPayload),
-  });
+  let lastError: any = null;
+  // Até 2 tentativas (1 tentativa inicial + 1 retry para erros transitórios)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyPayload),
+        signal: AbortSignal.timeout(20000), // Timeout rígido de 20s
+      });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(
-      errorData?.error?.message || `Falha na API Gemini (HTTP ${response.status})`
-    );
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const status = response.status;
+        const msg = errorData?.error?.message || `Falha na API Gemini (HTTP ${status})`;
+
+        // Se for erro transitório e for a 1ª tentativa, tenta novamente após 800ms
+        if ((status === 503 || status === 429 || status >= 500) && attempt === 1) {
+          await new Promise((r) => setTimeout(r, 800));
+          continue;
+        }
+
+        throw new Error(msg);
+      }
+
+      const data = await response.json();
+      const textOutput = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+      return {
+        text: textOutput.trim(),
+        model,
+        usage: data?.usageMetadata,
+      };
+    } catch (err: any) {
+      lastError = err;
+      if (attempt === 1 && (err.name === 'TimeoutError' || err.message?.includes('timeout'))) {
+        await new Promise((r) => setTimeout(r, 500));
+        continue;
+      }
+      break;
+    }
   }
 
-  const data = await response.json();
-  const textOutput =
-    data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (lastError?.name === 'TimeoutError' || lastError?.message?.includes('timeout')) {
+    throw new Error('Tempo limite excedido na resposta da IA (timeout de 20s). Tente uma descrição mais concisa.');
+  }
 
-  return {
-    text: textOutput.trim(),
-    model,
-    usage: data?.usageMetadata,
-  };
+  throw lastError || new Error('Falha ao comunicar com o Google Gemini.');
 }
 
 Deno.serve(async (req) => {
+  const currentCorsHeaders = getCorsHeaders(req);
+
   // CORS Preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: currentCorsHeaders });
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || '';
-
-  if (!geminiApiKey) {
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: 'Chave GEMINI_API_KEY não configurada no servidor Supabase.',
-      }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
 
   try {
     // 1. Validação Estrita do JWT
@@ -100,7 +128,7 @@ Deno.serve(async (req) => {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(
         JSON.stringify({ success: false, error: 'Não autorizado. JWT ausente ou inválido.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -108,7 +136,7 @@ Deno.serve(async (req) => {
     if (!token || token.startsWith('local-')) {
       return new Response(
         JSON.stringify({ success: false, error: 'Sessão inválida. Faça login com sua conta.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -118,7 +146,7 @@ Deno.serve(async (req) => {
     if (authError || !authData?.user) {
       return new Response(
         JSON.stringify({ success: false, error: 'Token expirado ou não autorizado.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -133,7 +161,7 @@ Deno.serve(async (req) => {
           success: false,
           error: `Ação "${action || ''}" inválida ou não suportada. Ações permitidas: ${SUPPORTED_ACTIONS.join(', ')}.`,
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -147,7 +175,7 @@ Deno.serve(async (req) => {
     if (profileErr || !profile) {
       return new Response(
         JSON.stringify({ success: false, error: 'Perfil de usuário não encontrado.' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 404, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -161,8 +189,55 @@ Deno.serve(async (req) => {
           planoAtual: userPlano,
           planoNecessario: 'TURBO',
         }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 403, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // 4. Verificação Segura da Configuração do GEMINI_API_KEY
+    if (!geminiApiKey) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Chave GEMINI_API_KEY não configurada no servidor Supabase.',
+        }),
+        { status: 500, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // =========================================================================
+    // AÇÃO ESPECIAL: Teste de Conexão com Google Gemini (NÃO consome quota de usuário)
+    // =========================================================================
+    if (action === 'test_connection') {
+      try {
+        const pingTest = await callGemini(
+          geminiApiKey,
+          'Responda com uma única palavra: OK',
+          'Você é um verificador de conectividade operacional.',
+          0.1
+        );
+
+        if (!pingTest.text) {
+          throw new Error('Sem resposta da API Google Gemini.');
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            provider: 'Google Gemini',
+            model: 'gemini-3.8-flash',
+          }),
+          { status: 200, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (testErr: any) {
+        console.warn('[fecha-ia test_connection Error]:', testErr?.message);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Serviço do Google Gemini temporariamente indisponível.',
+          }),
+          { status: 502, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // 4. VALIDAÇÃO PRÉVIA DOS PARÂMETROS DE ENTRADA (SEM CONSUMIR QUOTA SE INVÁLIDO)
@@ -173,7 +248,21 @@ Deno.serve(async (req) => {
       if (!descricaoPrompt) {
         return new Response(
           JSON.stringify({ success: false, error: 'O parâmetro "texto" com a descrição do serviço é obrigatório.' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 400, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (descricaoPrompt.length > 4000) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'A descrição excede o limite máximo permitido de 4.000 caracteres.' }),
+          { status: 400, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else if (action === 'analisar_precos') {
+      const itemConsultado = (body.item || body.servico || '').trim();
+      if (itemConsultado.length > 500) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'O termo de busca excede o limite máximo de 500 caracteres.' }),
+          { status: 400, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     } else if (action === 'gerar_fechamento' || action === 'follow_up') {
@@ -191,7 +280,7 @@ Deno.serve(async (req) => {
         if (orcErr || !dbOrcamento) {
           return new Response(
             JSON.stringify({ success: false, error: 'Orçamento não encontrado ou não pertence à sua conta.' }),
-            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 404, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         orcamentoData = dbOrcamento;
@@ -200,7 +289,7 @@ Deno.serve(async (req) => {
       if (!orcamentoData) {
         return new Response(
           JSON.stringify({ success: false, error: 'Dados do orçamento não fornecidos.' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 400, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -221,7 +310,7 @@ Deno.serve(async (req) => {
           success: false,
           error: 'Serviço de quota temporariamente indisponível. Tente novamente em instantes.',
         }),
-        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 503, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -233,7 +322,7 @@ Deno.serve(async (req) => {
           quotaExceeded: true,
           quota,
         }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 429, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -245,27 +334,38 @@ Deno.serve(async (req) => {
     if (action === 'gerar_orcamento') {
       const descricaoPrompt = (body.texto || body.prompt || '').trim();
 
-      const systemInstruction = `Você é um assistente comercial ultra eficiente de geração de orçamentos para prestadores de serviços brasileiros.
-Sua missão: extrair ou inferir itens com quantidade, valor unitário estimado de mercado em BRL (ou null se não for possível estimar com razoabilidade), prazos e condições a partir da descrição em texto/voz do usuário.
-Retorne EXCLUSIVAMENTE um objeto JSON válido (sem blocos markdown \`\`\`json, sem texto antes ou depois) com esta estrutura exata:
+      const systemInstruction = `Você é um copiloto de inteligência comercial para prestadores de serviços autônomos no Brasil (eletricistas, pintores, encanadores, marceneiros, pedreiros, técnicos, consultores, etc.).
+A partir da descrição livre do usuário (ex: "pintura de dois quartos e sala, parede já tem reboco"), sua missão é estruturar uma proposta profissional completa e cuidadosa.
+Diretrizes fundamentais:
+1. Nunca invente preços como fatos consumados. Se sugerir valores em BRL para mão de obra ou itens, eles devem ser explicitamente marcados como estimativas para revisão do prestador.
+2. Divida claramente entre mão de obra, etapas e materiais.
+3. Identifique possíveis "itens esquecidos" ou custos ocultos que o prestador ou cliente possam ter esquecido (ex: lixas, fita crepe, selador, caçamba de entulho, limpeza pós-obra).
+4. Elabore 2 a 3 "perguntas de alinhamento" úteis para o prestador fazer ao cliente antes de bater o martelo.
+5. Retorne EXCLUSIVAMENTE um objeto JSON válido (sem blocos markdown \`\`\`json, sem texto antes ou depois) com esta estrutura exata:
 {
   "clienteNome": string,
   "clienteTelefone": string,
+  "servico": string,
   "itens": [
     { "descricao": string, "quantidade": number, "valorUnitario": number | null, "total": number | null }
   ],
+  "etapas": string[],
+  "materiaisSugeridos": string[],
+  "itensEsquecidos": string[],
+  "perguntasAlinhamento": string[],
   "subtotal": number | null,
   "descontoTipo": "valor" | "porcentagem",
   "descontoValor": number,
   "valorTotal": number | null,
   "prazoEntrega": string,
   "formaPagamento": string,
-  "observacoes": string
+  "observacoes": string,
+  "avisoPreco": "Valor sugerido pela IA. Revise antes de enviar."
 }`;
 
       const aiResponse = await callGemini(
         geminiApiKey,
-        `Crie a proposta a partir desta descrição:\n\n"${descricaoPrompt}"`,
+        `Crie a proposta detalhada a partir desta descrição:\n\n"${descricaoPrompt}"`,
         systemInstruction,
         0.3
       );
@@ -310,23 +410,29 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem blocos markdown \`\`\`json, s
         parsedOrcamento = {
           clienteNome: typeof parsed.clienteNome === 'string' ? parsed.clienteNome : '',
           clienteTelefone: typeof parsed.clienteTelefone === 'string' ? parsed.clienteTelefone : '',
+          servico: typeof parsed.servico === 'string' ? parsed.servico : descricaoPrompt.slice(0, 60),
           itens: validatedItens,
+          etapas: Array.isArray(parsed.etapas) ? parsed.etapas : [],
+          materiaisSugeridos: Array.isArray(parsed.materiaisSugeridos) ? parsed.materiaisSugeridos : [],
+          itensEsquecidos: Array.isArray(parsed.itensEsquecidos) ? parsed.itensEsquecidos : [],
+          perguntasAlinhamento: Array.isArray(parsed.perguntasAlinhamento) ? parsed.perguntasAlinhamento : [],
           subtotal: calculatedSubtotal > 0 ? calculatedSubtotal : null,
           descontoTipo: parsed.descontoTipo === 'porcentagem' ? 'porcentagem' : 'valor',
           descontoValor: Number(parsed.descontoValor) >= 0 ? Number(parsed.descontoValor) : 0,
           valorTotal: calculatedSubtotal > 0 ? calculatedSubtotal : null,
           prazoEntrega: typeof parsed.prazoEntrega === 'string' ? parsed.prazoEntrega : 'A combinar',
-          formaPagamento: typeof parsed.formaPagamento === 'string' ? parsed.formaPagamento : 'Pix / Transferência',
+          formaPagamento: typeof parsed.formaPagamento === 'string' ? parsed.formaPagamento : '50% entrada + 50% na conclusão',
           observacoes: typeof parsed.observacoes === 'string' ? parsed.observacoes : '',
           sugestaoIa: true,
-          avisoPreco: 'Valores sugeridos pela IA. Revise antes de enviar.',
+          avisoPreco: 'Valor sugerido pela IA. Revise antes de enviar.',
         };
       } catch {
-        // Fallback sem inventar preço fixo de R$150/100
+        // Fallback sem inventar preço fixo artificial
         parsedOrcamento = {
           rawText: aiResponse.text,
           clienteNome: '',
           clienteTelefone: '',
+          servico: descricaoPrompt.slice(0, 60),
           itens: [
             {
               descricao: descricaoPrompt.slice(0, 100),
@@ -335,13 +441,17 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem blocos markdown \`\`\`json, s
               total: null,
             },
           ],
+          etapas: ['Alinhamento e preparação', 'Execução do serviço', 'Finalização e entrega'],
+          materiaisSugeridos: [],
+          itensEsquecidos: ['Verificar descarte de entulho e limpeza final'],
+          perguntasAlinhamento: ['Qual o prazo ideal desejado para a conclusão?'],
           subtotal: null,
           valorTotal: null,
           prazoEntrega: 'A combinar',
           formaPagamento: 'Pix / Dinheiro',
           observacoes: 'Gerado a partir da descrição fornecida.',
           sugestaoIa: true,
-          avisoPreco: 'Valores não estimados pela IA. Preencha os valores antes de salvar.',
+          avisoPreco: 'Valor sugerido pela IA. Revise antes de enviar.',
         };
       }
 
@@ -352,7 +462,7 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem blocos markdown \`\`\`json, s
           model: aiResponse.model,
           quotaRemaining: quota.remaining,
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -385,16 +495,32 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido (sem blocos markdown \`\`\`json, s
         }
       });
 
+      const temHistorico = historicoItens.length > 0;
+      const aprovados = historicoItens.filter((h) => h.status === 'aprovado');
+      const recusados = historicoItens.filter((h) => h.status === 'recusado');
+
+      const precosAprovados = aprovados.map((a) => a.preco);
+      const minAprovado = precosAprovados.length > 0 ? Math.min(...precosAprovados) : 0;
+      const maxAprovado = precosAprovados.length > 0 ? Math.max(...precosAprovados) : 0;
+      const mediaAprovado =
+        precosAprovados.length > 0
+          ? Math.round(precosAprovados.reduce((acc, v) => acc + v, 0) / precosAprovados.length)
+          : 0;
+
       const systemInstruction = `Você é um analista de precificação comercial para prestadores de serviços autônomos.
-Analise o histórico real de preços já cobrados pelo próprio usuário e forneça:
-1. Faixa de preço média praticada pelo profissional.
-2. Taxa de aprovação dos orçamentos nessa faixa de preço.
-3. Recomendação tática de preço para o serviço em questão com foco em fechamento sem depreciar o serviço.
-Se não houver histórico suficiente registrado para o serviço, deixe isso explícito de forma transparente e informe que a estimativa é baseada no mercado geral, devendo ser revisada pelo prestador.`;
+Analise os dados reais do usuário com rigor:
+1. Se houver histórico: cite especificamente a faixa real cobrada pelo usuário.
+   Exemplo de padrão analítico: "Nos últimos X orçamentos registrados, sua faixa mais aceita ficou entre R$ ${minAprovado} e R$ ${maxAprovado} (média de R$ ${mediaAprovado})."
+   Não transforme correlação em certeza absoluta. Apresente insights de competitividade.
+2. Se NÃO houver histórico suficiente: declare com total transparência que não há registros anteriores deste serviço na conta do usuário no FechaZap. Apresente uma faixa estimativa de mercado geral e inclua obrigatoriamente a advertência: "Valor sugerido pela IA. Revise antes de enviar."
+3. Seja conciso (2 a 3 parágrafos curtos) e focado em lucro justo sem desvalorizar o trabalho.`;
 
       const promptContext = `Serviço a analisar: "${itemConsultado || 'Geral'}"
-Histórico registrado do profissional (${historicoItens.length} itens encontrados no banco):
-${JSON.stringify(historicoItens.slice(0, 30), null, 2)}`;
+Tem histórico no banco: ${temHistorico ? 'SIM' : 'NÃO'}
+Total de itens no histórico: ${historicoItens.length} (${aprovados.length} aprovados, ${recusados.length} recusados)
+Faixa dos aprovados: R$ ${minAprovado} até R$ ${maxAprovado} (Média: R$ ${mediaAprovado})
+Amostras recentes:
+${JSON.stringify(historicoItens.slice(0, 20), null, 2)}`;
 
       const aiResponse = await callGemini(geminiApiKey, promptContext, systemInstruction, 0.4);
 
@@ -402,11 +528,13 @@ ${JSON.stringify(historicoItens.slice(0, 30), null, 2)}`;
         JSON.stringify({
           success: true,
           text: aiResponse.text,
+          temHistorico,
           model: aiResponse.model,
           totalAmostras: historicoItens.length,
+          avisoPreco: temHistorico ? undefined : 'Valor sugerido pela IA. Revise antes de enviar.',
           quotaRemaining: quota.remaining,
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -429,7 +557,7 @@ Requisitos:
 - Formatação para WhatsApp com negritos (*texto*).
 - 2 parágrafos curtos e objetivos.
 - Chamada para ação clara para aprovar a execução.
-- Retorne exclusivamente o texto da mensagem.`;
+- Retorne exclusivamente o texto da mensagem para que o usuário possa revisar e editar antes do envio.`;
 
       const aiResponse = await callGemini(geminiApiKey, prompt, undefined, 0.65);
 
@@ -440,23 +568,58 @@ Requisitos:
           model: aiResponse.model,
           quotaRemaining: quota.remaining,
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // OPERAÇÃO D: follow_up
+    // OPERAÇÃO D: follow_up (Com suporte a cenários comerciais específicos)
     if (action === 'follow_up') {
       const orcamentoData = validatedOrcamentoData;
       const clienteNome = orcamentoData?.cliente_nome || orcamentoData?.clienteNome || 'Cliente';
-      const dias = Number(body.dias) || 2;
       const empresaNome = body.empresa?.nomeFantasia || profile.nome || 'Nossa Empresa';
+      const cenario = body.cenario || body.tipo || 'primeiro'; // 'primeiro' | 'segundo' | 'sem_resposta' | 'proximo_vencimento' | 'pedido_desconto' | 'interesse' | 'recusa'
+      const dias = Number(body.dias) || 2;
 
-      const prompt = `Crie uma mensagem curta, educada e persuasiva de acompanhamento (follow-up) no WhatsApp para enviar ${dias} dias após a apresentação do orçamento.
+      let instrucaoCenario = '';
+      switch (cenario) {
+        case 'primeiro':
+          instrucaoCenario = `Primeiro contato pós-envio (${dias} dias). Pergunte com cordialidade se o cliente conseguiu avaliar o orçamento #${orcamentoData?.numero} e se tem alguma dúvida sobre os itens descritos.`;
+          break;
+        case 'segundo':
+          instrucaoCenario = `Segundo acompanhamento. Reforce a disponibilidade de agenda para a realização dos serviços e confirme se as condições de pagamento atendem.`;
+          break;
+        case 'sem_resposta':
+          instrucaoCenario = `Cliente não responde há vários dias. Seja muito simpático, evite parecer insistente ou spam. Diga que compreende a rotina corrida e pergunte se o projeto ainda segue nos planos.`;
+          break;
+        case 'proximo_vencimento':
+          instrucaoCenario = `Orçamento próximo da data de validade (${orcamentoData?.data_validade || 'em breve'}). Lembre com elegância que as condições e valores combinados estão garantidos até a data limite.`;
+          break;
+        case 'pedido_desconto':
+          instrucaoCenario = `O cliente solicitou desconto ou negociação. Apresente alternativas cordiais (ex: pequena condição especial no pagamento à vista via Pix ou parcelamento flexível) sem desvalorizar a qualidade da mão de obra.`;
+          break;
+        case 'interesse':
+          instrucaoCenario = `O cliente demonstrou interesse no serviço. Mostre entusiasmo e proponha o próximo passo direto: fechar a data de início ou formalizar o agendamento.`;
+          break;
+        case 'recusa':
+          instrucaoCenario = `O cliente informou que não fechará no momento. Responda com agradecimento sincero pelo tempo e deixe a porta 100% aberta para oportunidades futuras.`;
+          break;
+        default:
+          instrucaoCenario = `Acompanhamento geral educado e persuasivo de ${dias} dias.`;
+      }
+
+      const prompt = `Crie uma mensagem curta para WhatsApp com foco comercial ético.
 Cliente: ${clienteNome}
-Proposta: #${orcamentoData?.numero || ''}
-Valor: R$ ${orcamentoData?.valor_total || orcamentoData?.valorTotal || ''}
+Orçamento: #${orcamentoData?.numero || ''}
+Valor Total: R$ ${orcamentoData?.valor_total || orcamentoData?.valorTotal || ''}
 Empresa: ${empresaNome}
-Objetivo: Perguntar com cordialidade se restou alguma dúvida técnica ou sobre pagamento para darmos início.`;
+Cenário do follow-up: ${instrucaoCenario}
+
+Requisitos:
+- Linguagem natural em português brasileiro.
+- Máximo 2 parágrafos curtos.
+- Use formatação simples de WhatsApp (*negrito*).
+- Não seja robótico nem invasivo.
+- Retorne apenas o texto da mensagem.`;
 
       const aiResponse = await callGemini(geminiApiKey, prompt, undefined, 0.6);
 
@@ -464,16 +627,17 @@ Objetivo: Perguntar com cordialidade se restou alguma dúvida técnica ou sobre 
         JSON.stringify({
           success: true,
           text: aiResponse.text,
+          cenario,
           model: aiResponse.model,
           quotaRemaining: quota.remaining,
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     return new Response(
       JSON.stringify({ success: false, error: 'Ação não processada.' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 400, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err: any) {
     console.error('[fecha-ia Exception]:', err);
@@ -482,7 +646,7 @@ Objetivo: Perguntar com cordialidade se restou alguma dúvida técnica ou sobre 
         success: false,
         error: err?.message || 'Erro interno no processamento da IA.',
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

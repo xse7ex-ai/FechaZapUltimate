@@ -19,6 +19,7 @@ import {
   gerarFechamentoGemini,
   gerarFollowUpGemini,
   analisarPrecosComIA,
+  TipoCenarioFollowUp,
 } from '../utils/ai';
 import { openWhatsAppMessage, dispararFollowUpTurbo } from '../utils/whatsapp';
 import { formatCurrency } from '../utils/format';
@@ -57,6 +58,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
 
   // Follow-up State
   const [diasFollowUp, setDiasFollowUp] = useState<number>(2);
+  const [cenarioFollowUp, setCenarioFollowUp] = useState<TipoCenarioFollowUp>('primeiro');
   const [followUpDispatching, setFollowUpDispatching] = useState<boolean>(false);
   const [lastFallbackUrl, setLastFallbackUrl] = useState<string | null>(null);
 
@@ -107,10 +109,11 @@ export const ModalIA: React.FC<ModalIAProps> = ({
       const text = await gerarFollowUpGemini(
         currentOrcamento,
         diasFollowUp,
-        empresa
+        empresa,
+        cenarioFollowUp
       );
       setGeneratedText(text);
-      onShowToast('Follow-up criado com Gemini!', 'Mensagem de acompanhamento pronta.', 'success');
+      onShowToast('Follow-up criado com Gemini!', 'Mensagem de acompanhamento pronta para revisão.', 'success');
     } catch (err: any) {
       console.error(err);
       onShowToast('Aviso de IA', err?.message, 'error');
@@ -401,6 +404,25 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                   <div className="flex flex-wrap items-center gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                        Cenário Comercial:
+                      </label>
+                      <select
+                        value={cenarioFollowUp}
+                        onChange={(e) => setCenarioFollowUp(e.target.value as TipoCenarioFollowUp)}
+                        className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 font-medium"
+                      >
+                        <option value="primeiro">1º Contato (Acompanhamento inicial)</option>
+                        <option value="segundo">2º Contato (Disponibilidade e agenda)</option>
+                        <option value="sem_resposta">Cliente sem retorno (Reconectar com simpatia)</option>
+                        <option value="proximo_vencimento">Vencimento próximo (Garantir condições)</option>
+                        <option value="pedido_desconto">Pedido de desconto (Negociação ética)</option>
+                        <option value="interesse">Interesse demonstrado (Avançar para início)</option>
+                        <option value="recusa">Cliente recusou (Manter porta aberta)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
                         Dias desde a proposta:
                       </label>
                       <select
@@ -516,8 +538,17 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-800 dark:text-slate-100 whitespace-pre-wrap font-sans leading-relaxed shadow-xs">
-                    {generatedText}
+                  <div className="relative">
+                    <textarea
+                      rows={6}
+                      value={generatedText}
+                      onChange={(e) => setGeneratedText(e.target.value)}
+                      className="w-full p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs sm:text-sm text-slate-800 dark:text-slate-100 font-sans leading-relaxed focus:ring-2 focus:ring-emerald-500 outline-none resize-y shadow-xs"
+                      placeholder="Texto gerado pela IA..."
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 italic">
+                      Dica: você pode editar livremente o texto acima para personalizar antes de copiar ou enviar no WhatsApp.
+                    </p>
                   </div>
                 </div>
               )}

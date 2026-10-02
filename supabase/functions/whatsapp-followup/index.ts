@@ -5,9 +5,9 @@
 //   - Verificação obrigatória de Opt-in/Opt-out do cliente antes do envio
 //   - Consumo de quota atômica de IA apenas após validação de parâmetros e elegibilidade
 //   - Envio exclusivo via Template pré-aprovado da Meta (SEM fallback automático para texto livre)
-//   - Suporte à conexão WhatsApp multi-tenant do usuário com fallback central
+//   - Suporte exclusivo à conexão WhatsApp multi-tenant ativa do usuário
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { getCorsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 function cleanPhoneNumber(phone: string): string {
@@ -24,18 +24,19 @@ function buildDirectWhatsAppUrl(phone: string, text: string): string {
 }
 
 Deno.serve(async (req) => {
+  const currentCorsHeaders = getCorsHeaders(req);
+
   // CORS Preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: currentCorsHeaders });
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || '';
 
-  // Credenciais padrão centrais do servidor
-  const defaultMetaToken = Deno.env.get('WHATSAPP_TOKEN') || '';
-  const defaultMetaPhoneId = Deno.env.get('PHONE_NUMBER_ID') || '';
+  // Credenciais centrais do servidor para envio via Meta Cloud API
+  const metaToken = Deno.env.get('WHATSAPP_TOKEN') || '';
   const metaTemplateName = Deno.env.get('WHATSAPP_TEMPLATE_NAME') || 'fechazap_followup';
 
   try {
@@ -44,7 +45,7 @@ Deno.serve(async (req) => {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(
         JSON.stringify({ success: false, error: 'Não autorizado. JWT ausente ou inválido.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -52,7 +53,7 @@ Deno.serve(async (req) => {
     if (!token || token.startsWith('local-')) {
       return new Response(
         JSON.stringify({ success: false, error: 'Sessão inválida. Faça login com sua conta.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
     if (authError || !authData?.user) {
       return new Response(
         JSON.stringify({ success: false, error: 'Token expirado ou não autorizado.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -73,7 +74,7 @@ Deno.serve(async (req) => {
     if (!orcamentoId || typeof orcamentoId !== 'string') {
       return new Response(
         JSON.stringify({ success: false, error: 'O parâmetro "orcamentoId" é obrigatório.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -87,7 +88,7 @@ Deno.serve(async (req) => {
     if (profileErr || !profile) {
       return new Response(
         JSON.stringify({ success: false, error: 'Perfil de usuário não encontrado.' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 404, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -101,7 +102,7 @@ Deno.serve(async (req) => {
           planoAtual: userPlano,
           planoNecessario: 'TURBO',
         }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 403, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -116,7 +117,7 @@ Deno.serve(async (req) => {
     if (orcErr || !orcamento) {
       return new Response(
         JSON.stringify({ success: false, error: 'Orçamento não encontrado ou não pertence à sua conta.' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 404, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -124,7 +125,7 @@ Deno.serve(async (req) => {
     if (!telefoneDestino) {
       return new Response(
         JSON.stringify({ success: false, error: 'O cliente não possui telefone de contato cadastrado.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -165,27 +166,37 @@ Deno.serve(async (req) => {
           code: 'CLIENT_OPTED_OUT',
           fallbackUrl: directUrl,
         }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 403, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 5. Verificação da Conexão WhatsApp Multi-Tenant do Usuário
-    let effectivePhoneId = defaultMetaPhoneId;
-    let effectiveToken = defaultMetaToken;
-
-    const { data: userConn } = await supabaseAdmin
+    // 5. Verificação Obrigatória da Conexão WhatsApp Ativa do Usuário (Multi-Tenant)
+    // Se o usuário TURBO não possuir uma conexão ativa, bloqueia com erro explícito ANTES de debitar quota
+    const { data: userConn, error: connErr } = await supabaseAdmin
       .from('whatsapp_connections')
       .select('phone_number_id, status')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .maybeSingle();
 
-    if (userConn?.phone_number_id) {
-      effectivePhoneId = userConn.phone_number_id;
+    if (connErr || !userConn?.phone_number_id) {
+      const directUrl = buildDirectWhatsAppUrl(phoneClean, `Olá, ${orcamento.cliente_nome || 'Cliente'}.`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Conexão do WhatsApp comercial não encontrada ou inativa para este usuário. Conecte seu número nas configurações para utilizar o disparo automático ou envie manualmente.',
+          code: 'WHATSAPP_CONNECTION_REQUIRED',
+          fallbackUrl: directUrl,
+        }),
+        { status: 400, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
+    const effectivePhoneId = userConn.phone_number_id;
+    const effectiveToken = metaToken;
+
     // 6. CONSUMO ATÔMICO DE QUOTA DE IA
-    // Executado exclusivamente após validação completa de autorização, orçamento e opt-in
+    // Executado exclusivamente após validação completa de autorização, orçamento, opt-in e conexão WhatsApp ativa
     const { data: quota, error: quotaErr } = await supabaseAdmin.rpc('consume_ai_quota', {
       p_user_id: user.id,
       p_tipo_operacao: 'whatsapp_followup_turbo',
@@ -196,7 +207,7 @@ Deno.serve(async (req) => {
       console.error('[consume_ai_quota RPC Error]:', quotaErr);
       return new Response(
         JSON.stringify({ success: false, error: 'Serviço de quota temporariamente indisponível.' }),
-        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 503, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -208,7 +219,7 @@ Deno.serve(async (req) => {
           quotaExceeded: true,
           quota,
         }),
-        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 429, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -296,7 +307,7 @@ Objetivo: Perguntar se restou alguma dúvida para fechar o serviço. Use negrito
             clienteTelefone: telefoneDestino,
           },
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 200, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -366,7 +377,7 @@ Objetivo: Perguntar se restou alguma dúvida para fechar o serviço. Use negrito
               clienteTelefone: telefoneDestino,
             },
           }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
         );
       } else {
         // Log técnico sem vazar credenciais
@@ -374,17 +385,37 @@ Objetivo: Perguntar se restou alguma dúvida para fechar o serviço. Use negrito
         const errorMessage = metaData?.error?.message || 'Falha no envio do template pré-aprovado pela Meta.';
         console.warn(`[whatsapp-followup] Falha no template Meta (Code: ${errorCode}): ${errorMessage}`);
 
-        // Retorna erro compreensível com a opção manual transparente via wa.me
+        // Trata token inválido / revogado da Meta (Código 190 ou subcódigos de expiração)
+        const isTokenRevoked =
+          errorCode === 190 ||
+          errorCode === '190' ||
+          metaData?.error?.error_subcode === 463 ||
+          metaData?.error?.error_subcode === 467;
+
+        if (isTokenRevoked) {
+          console.warn(`[whatsapp-followup] Token Meta expirado ou revogado para o usuário ${user.id}`);
+          await supabaseAdmin
+            .from('whatsapp_connections')
+            .update({ status: 'revoked', updated_at: new Date().toISOString() })
+            .eq('user_id', user.id)
+            .eq('phone_number_id', effectivePhoneId);
+        }
+
+        const userFriendlyError = isTokenRevoked
+          ? 'Sua conexão com o WhatsApp oficial da Meta expirou ou foi revogada. Por favor, acesse as Configurações para reconectar seu número.'
+          : 'Não foi possível enviar o acompanhamento pelo WhatsApp comercial oficial da Meta. Você pode abrir o WhatsApp e enviar manualmente.';
+
+        // Retorna erro compreensível com a opção manual transparente via wa.me (Regra 6)
         return new Response(
           JSON.stringify({
             success: false,
             provider: 'meta-cloud-api',
-            error: 'Não foi possível enviar o acompanhamento pelo WhatsApp comercial oficial da Meta. Você pode abrir o WhatsApp e enviar manualmente.',
-            code: errorCode,
+            error: userFriendlyError,
+            code: isTokenRevoked ? 'META_TOKEN_REVOKED' : errorCode,
             fallbackUrl,
             quotaRemaining: quota.remaining,
           }),
-          { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 422, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     } catch (metaErr: any) {
@@ -397,7 +428,7 @@ Objetivo: Perguntar se restou alguma dúvida para fechar o serviço. Use negrito
           fallbackUrl,
           quotaRemaining: quota.remaining,
         }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 502, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
   } catch (err: any) {
@@ -407,7 +438,7 @@ Objetivo: Perguntar se restou alguma dúvida para fechar o serviço. Use negrito
         success: false,
         error: err?.message || 'Erro interno no processamento de follow-up.',
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

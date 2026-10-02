@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Building2,
@@ -17,10 +17,18 @@ import {
   EyeOff,
   Info,
   User,
+  Smartphone,
+  Unlink,
+  Link2,
 } from 'lucide-react';
-import { ConfiguracaoEmpresa } from '../types';
+import { ConfiguracaoEmpresa, WhatsAppConnection } from '../types';
 import { testarConexaoGemini, GeminiStatusResult } from '../utils/ai';
 import { useTheme } from '../context/ThemeContext';
+import {
+  fetchWhatsAppConnection,
+  saveWhatsAppConnection,
+  disconnectWhatsAppConnection,
+} from '../utils/supabase';
 
 interface ModalConfiguracoesProps {
   isOpen: boolean;
@@ -48,9 +56,81 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
   const [testResult, setTestResult] = useState<GeminiStatusResult | null>(null);
   const { theme, setTheme, isDark } = useTheme();
 
+  // Estados de Conexão WhatsApp Multi-Tenant (Fase 5)
+  const [waConn, setWaConn] = useState<WhatsAppConnection | null>(null);
+  const [loadingConn, setLoadingConn] = useState<boolean>(false);
+  const [savingConn, setSavingConn] = useState<boolean>(false);
+  const [phoneIdInput, setPhoneIdInput] = useState<string>('');
+  const [wabaIdInput, setWabaIdInput] = useState<string>('');
+  const [displayPhoneInput, setDisplayPhoneInput] = useState<string>('');
+  const [showConnForm, setShowConnForm] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLoadingConn(true);
+      fetchWhatsAppConnection()
+        .then((conn) => {
+          setWaConn(conn);
+          if (conn) {
+            setPhoneIdInput(conn.phoneNumberId || '');
+            setWabaIdInput(conn.wabaId || '');
+            setDisplayPhoneInput(conn.displayPhoneNumber || '');
+          }
+        })
+        .finally(() => setLoadingConn(false));
+    }
+  }, [isOpen]);
+
+  const handleSaveConnection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneIdInput.trim()) {
+      onShowToast('Campo obrigatório', 'Informe o Phone Number ID da Meta.', 'error');
+      return;
+    }
+    setSavingConn(true);
+    try {
+      const res = await saveWhatsAppConnection({
+        phoneNumberId: phoneIdInput.trim(),
+        wabaId: wabaIdInput.trim() || undefined,
+        displayPhoneNumber: displayPhoneInput.trim() || undefined,
+      });
+      if (res.success) {
+        onShowToast('Conexão Salva!', 'Número comercial conectado com sucesso.', 'success');
+        const updated = await fetchWhatsAppConnection();
+        setWaConn(updated);
+        setShowConnForm(false);
+      } else {
+        onShowToast('Erro ao salvar conexão', res.error, 'error');
+      }
+    } finally {
+      setSavingConn(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!confirm('Deseja realmente desconectar seu número comercial do WhatsApp? O envio automático será desativado.')) {
+      return;
+    }
+    setSavingConn(true);
+    try {
+      const res = await disconnectWhatsAppConnection();
+      if (res.success) {
+        onShowToast('WhatsApp Desconectado', 'O disparo automático foi desativado.', 'info');
+        setWaConn(null);
+        setPhoneIdInput('');
+        setWabaIdInput('');
+        setDisplayPhoneInput('');
+      } else {
+        onShowToast('Erro ao desconectar', res.error, 'error');
+      }
+    } finally {
+      setSavingConn(false);
+    }
+  };
+
   if (!isOpen) return null;
 
-  const handleChange = (field: keyof ConfiguracaoEmpresa, value: any) => {
+  const handleChange = <K extends keyof ConfiguracaoEmpresa>(field: K, value: ConfiguracaoEmpresa[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -246,29 +326,188 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
             </div>
           </div>
 
-          {/* SEÇÃO INTEGRAÇÃO WHATSAPP API */}
-          <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-50/60 via-slate-50 to-teal-50/40 dark:from-slate-900 dark:via-slate-850 dark:to-emerald-950/20 border border-emerald-300/80 dark:border-emerald-500/30 shadow-xs space-y-3">
+          {/* SEÇÃO INTEGRAÇÃO WHATSAPP CLOUD API MULTI-TENANT (FASE 5) */}
+          <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-50/70 via-slate-50 to-teal-50/50 dark:from-slate-900 dark:via-slate-850 dark:to-emerald-950/30 border border-emerald-300/80 dark:border-emerald-500/30 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-500/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-xs">
-                  <MessageSquare className="w-3.5 h-3.5" />
+                <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-500/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-xs">
+                  <Smartphone className="w-4 h-4" />
                 </div>
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-emerald-300">
-                  Envio WhatsApp com Fallback Universal
-                </span>
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-emerald-300">
+                    WhatsApp Cloud API Multi-Tenant
+                  </span>
+                  <span className="block text-[10px] text-slate-500 dark:text-slate-400">
+                    Roteamento seguro por Phone Number ID (Meta Graph API)
+                  </span>
+                </div>
               </div>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
-                100% Compatível
+              <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+                waConn?.status === 'active'
+                  ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                  : waConn?.status === 'revoked'
+                  ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-700'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700'
+              }`}>
+                {loadingConn
+                  ? 'Verificando...'
+                  : waConn?.status === 'active'
+                  ? '🟢 Conexão Ativa'
+                  : waConn?.status === 'revoked'
+                  ? '🔴 Conexão Revogada'
+                  : '⚪ Desconectado'}
               </span>
             </div>
 
-            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              O FechaZap gera links diretos e prontos de WhatsApp (<code>wa.me</code>) para todos os orçamentos e mensagens, funcionando em qualquer celular ou computador sem você precisar configurar tokens ou contas complexas da Meta.
-            </p>
+            {/* Status e Detalhes da Conexão */}
+            {waConn && waConn.status === 'active' ? (
+              <div className="bg-white dark:bg-slate-900/90 p-3 rounded-lg border border-emerald-200/80 dark:border-slate-700 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-600 dark:text-slate-400">Número Comercial:</span>
+                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                    {waConn.displayPhoneNumber || 'Número Oficial Meta'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-600 dark:text-slate-400">Phone Number ID:</span>
+                  <span className="font-mono text-slate-700 dark:text-slate-300">
+                    {waConn.phoneNumberId}
+                  </span>
+                </div>
+                {waConn.wabaId && (
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-600 dark:text-slate-400">WABA ID:</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300">
+                      {waConn.wabaId}
+                    </span>
+                  </div>
+                )}
+                <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowConnForm(!showConnForm)}
+                    className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                  >
+                    {showConnForm ? 'Fechar Edição' : 'Editar Identificadores'}
+                  </button>
 
-            <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span>Para clientes do plano <strong>TURBO</strong>, o follow-up automático pelo WhatsApp é gerenciado com segurança diretamente pela infraestrutura de servidor.</span>
+                  <button
+                    type="button"
+                    onClick={handleDisconnect}
+                    disabled={savingConn}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 cursor-pointer disabled:opacity-50"
+                  >
+                    <Unlink className="w-3 h-3" />
+                    <span>Desconectar</span>
+                  </button>
+                </div>
+              </div>
+            ) : waConn && waConn.status === 'revoked' ? (
+              <div className="p-3 rounded-lg bg-rose-50/70 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-xs space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-rose-900 dark:text-rose-200">
+                    <strong>Atenção:</strong> Sua conexão anterior foi revogada ou expirou na Meta. Por favor, reconfigure seus identificadores para restabelecer os disparos automatizados.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowConnForm(true)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 cursor-pointer"
+                >
+                  Reconectar Número
+                </button>
+              </div>
+            ) : (
+              <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
+                <p className="text-slate-600 dark:text-slate-300 text-[11px]">
+                  Conecte seu <strong>Phone Number ID</strong> da Meta para habilitar recebimento em tempo real e follow-up oficial via Cloud API.
+                </p>
+                {!showConnForm && (
+                  <button
+                    type="button"
+                    onClick={() => setShowConnForm(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-colors"
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    <span>Conectar Número Comercial</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Formulário de Configuração de Tenant */}
+            {showConnForm && (
+              <div className="bg-slate-50 dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-300 dark:border-slate-700 space-y-3">
+                <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Configurar Identificadores Meta Cloud API
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">
+                      Phone Number ID *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 104592039281723"
+                      value={phoneIdInput}
+                      onChange={(e) => setPhoneIdInput(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">
+                      Número de Exibição
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: +55 (11) 98765-4321"
+                      value={displayPhoneInput}
+                      onChange={(e) => setDisplayPhoneInput(e.target.value)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">
+                    WhatsApp Business Account ID (WABA ID - Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 928374610293847"
+                    value={wabaIdInput}
+                    onChange={(e) => setWabaIdInput(e.target.value)}
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowConnForm(false)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveConnection}
+                    disabled={savingConn}
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer disabled:opacity-50"
+                  >
+                    {savingConn ? 'Salvando...' : 'Salvar Conexão'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Aviso de Arquitetura e Segurança */}
+            <div className="p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-850 flex items-start gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <div className="text-[11px] text-emerald-950 dark:text-emerald-200 leading-relaxed">
+                <strong>Segurança & Isolamento (RLS):</strong> Roteamento estrito por <code>phone_number_id</code>. Tokens da Meta nunca são expostos ao navegador. Fallback universal via link direto (<code>wa.me</code>) disponível para todos os orçamentos e mensagens manuais.
+              </div>
             </div>
           </div>
 
@@ -368,7 +607,7 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
                 </label>
                 <select
                   value={formData.tipoChavePix}
-                  onChange={(e) => handleChange('tipoChavePix', e.target.value)}
+                  onChange={(e) => handleChange('tipoChavePix', e.target.value as ConfiguracaoEmpresa['tipoChavePix'])}
                   className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="cnpj">CNPJ</option>

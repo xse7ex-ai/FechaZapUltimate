@@ -1,14 +1,37 @@
-import { Orcamento, Cliente, TipoPlano, ItemOrcamento, StatusOrcamento } from '../types';
+import { Orcamento, Cliente, TipoPlano, ItemOrcamento, StatusOrcamento, DbOrcamentoRow, DbClienteRow } from '../types';
 import { getSupabase } from './supabase';
 import { loadUserSyncQueue, saveUserSyncQueue } from './storage';
+import { logger } from './logger';
 
-export interface PendingSyncItem {
-  id: string;
-  userId: string; // Identifica com precisão e segurança o usuário dono da operação
-  type: 'save_orcamento' | 'delete_orcamento' | 'save_cliente' | 'delete_cliente';
-  payload: any;
-  timestamp: number;
-}
+export type PendingSyncItem =
+  | {
+      id: string;
+      userId: string;
+      type: 'save_orcamento';
+      payload: Orcamento;
+      timestamp: number;
+    }
+  | {
+      id: string;
+      userId: string;
+      type: 'delete_orcamento';
+      payload?: { id: string } | Record<string, unknown>;
+      timestamp: number;
+    }
+  | {
+      id: string;
+      userId: string;
+      type: 'save_cliente';
+      payload: Cliente;
+      timestamp: number;
+    }
+  | {
+      id: string;
+      userId: string;
+      type: 'delete_cliente';
+      payload?: { id: string } | Record<string, unknown>;
+      timestamp: number;
+    };
 
 export function isCloudSyncEnabled(plano: TipoPlano): boolean {
   return plano === 'PRO' || plano === 'TURBO';
@@ -25,7 +48,7 @@ function saveSyncQueue(userId: string | null | undefined, queue: PendingSyncItem
 export function enqueueSync(item: Omit<PendingSyncItem, 'timestamp'>): void {
   const queue = getSyncQueue(item.userId);
   const filtered = queue.filter((q) => !(q.id === item.id && q.type === item.type));
-  filtered.push({ ...item, timestamp: Date.now() });
+  filtered.push({ ...item, timestamp: Date.now() } as PendingSyncItem);
   saveSyncQueue(item.userId, filtered);
 }
 
@@ -39,17 +62,18 @@ export function dequeueSync(userId: string | null | undefined, id: string, type:
 // Mapeadores DB <-> Frontend
 // ==========================================
 
-export function mapDbToOrcamento(row: any): Orcamento {
-  const validStatus: StatusOrcamento = ['pendente', 'enviado', 'aprovado', 'recusado'].includes(row.status)
-    ? row.status
+export function mapDbToOrcamento(row: Partial<DbOrcamentoRow> | Record<string, unknown>): Orcamento {
+  const statusStr = typeof row.status === 'string' ? row.status : 'pendente';
+  const validStatus: StatusOrcamento = ['pendente', 'enviado', 'aprovado', 'recusado'].includes(statusStr)
+    ? (statusStr as StatusOrcamento)
     : 'pendente';
 
   return {
-    id: String(row.id),
+    id: String(row.id || ''),
     numero: String(row.numero || '101'),
     clienteId: row.cliente_id ? String(row.cliente_id) : '',
-    clienteNome: row.cliente_nome || 'Cliente',
-    clienteTelefone: row.cliente_telefone || '',
+    clienteNome: typeof row.cliente_nome === 'string' ? row.cliente_nome : 'Cliente',
+    clienteTelefone: typeof row.cliente_telefone === 'string' ? row.cliente_telefone : '',
     itens: Array.isArray(row.itens) ? (row.itens as ItemOrcamento[]) : [],
     subtotal: Number(row.subtotal) || 0,
     descontoTipo: row.desconto_tipo === 'porcentagem' ? 'porcentagem' : 'valor',
@@ -58,14 +82,14 @@ export function mapDbToOrcamento(row: any): Orcamento {
     status: validStatus,
     dataCriacao: row.created_at ? String(row.created_at).slice(0, 10) : new Date().toISOString().slice(0, 10),
     dataValidade: row.data_validade ? String(row.data_validade).slice(0, 10) : '',
-    formaPagamento: row.forma_pagamento || '',
-    prazoEntrega: row.prazo_entrega || '',
-    observacoes: row.observacoes || undefined,
-    termosGarantia: row.termos_garantia || undefined,
+    formaPagamento: typeof row.forma_pagamento === 'string' ? row.forma_pagamento : '',
+    prazoEntrega: typeof row.prazo_entrega === 'string' ? row.prazo_entrega : '',
+    observacoes: typeof row.observacoes === 'string' ? row.observacoes : undefined,
+    termosGarantia: typeof row.termos_garantia === 'string' ? row.termos_garantia : undefined,
   };
 }
 
-export function mapOrcamentoToDb(orc: Orcamento, userId: string): Record<string, any> {
+export function mapOrcamentoToDb(orc: Orcamento, userId: string): DbOrcamentoRow {
   return {
     id: orc.id,
     user_id: userId,
@@ -88,28 +112,28 @@ export function mapOrcamentoToDb(orc: Orcamento, userId: string): Record<string,
   };
 }
 
-export function mapDbToCliente(row: any): Cliente {
+export function mapDbToCliente(row: Partial<DbClienteRow> | Record<string, unknown>): Cliente {
   return {
-    id: String(row.id),
-    nome: row.nome || 'Cliente',
-    telefone: row.telefone || '',
-    email: row.email || undefined,
-    documento: row.documento || undefined,
-    cidade: row.cidade || undefined,
-    endereco: row.endereco || undefined,
-    observacoes: row.observacoes || undefined,
+    id: String(row.id || ''),
+    nome: typeof row.nome === 'string' ? row.nome : 'Cliente',
+    telefone: typeof row.telefone === 'string' ? row.telefone : '',
+    email: typeof row.email === 'string' ? row.email : undefined,
+    documento: typeof row.documento === 'string' ? row.documento : undefined,
+    cidade: typeof row.cidade === 'string' ? row.cidade : undefined,
+    endereco: typeof row.endereco === 'string' ? row.endereco : undefined,
+    observacoes: typeof row.observacoes === 'string' ? row.observacoes : undefined,
     dataCadastro: row.created_at ? String(row.created_at).slice(0, 10) : new Date().toISOString().slice(0, 10),
     totalOrcamentos: 0,
     valorTotalGasto: 0,
     whatsappOptIn: row.whatsapp_opt_in !== undefined ? Boolean(row.whatsapp_opt_in) : true,
-    whatsappOptInAt: row.whatsapp_opt_in_at || undefined,
-    whatsappOptInSource: row.whatsapp_opt_in_source || undefined,
-    whatsappOptOutAt: row.whatsapp_opt_out_at || undefined,
-    lastInboundAt: row.last_inbound_at || undefined,
+    whatsappOptInAt: typeof row.whatsapp_opt_in_at === 'string' ? row.whatsapp_opt_in_at : undefined,
+    whatsappOptInSource: typeof row.whatsapp_opt_in_source === 'string' ? row.whatsapp_opt_in_source : undefined,
+    whatsappOptOutAt: typeof row.whatsapp_opt_out_at === 'string' ? row.whatsapp_opt_out_at : undefined,
+    lastInboundAt: typeof row.last_inbound_at === 'string' ? row.last_inbound_at : undefined,
   };
 }
 
-export function mapClienteToDb(cli: Cliente, userId: string): Record<string, any> {
+export function mapClienteToDb(cli: Cliente, userId: string): DbClienteRow {
   return {
     id: cli.id,
     user_id: userId,
@@ -120,7 +144,7 @@ export function mapClienteToDb(cli: Cliente, userId: string): Record<string, any
     cidade: cli.cidade || null,
     endereco: cli.endereco || null,
     observacoes: cli.observacoes || null,
-    whatsapp_opt_in: cli.whatsappOptIn !== undefined ? cli.whatsappOptIn : true,
+    whatsapp_opt_in: cli.whatsappOptIn ?? true,
     whatsapp_opt_in_at: cli.whatsappOptInAt || null,
     whatsapp_opt_in_source: cli.whatsappOptInSource || 'cadastro',
     whatsapp_opt_out_at: cli.whatsappOptOutAt || null,

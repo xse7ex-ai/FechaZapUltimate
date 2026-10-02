@@ -31,7 +31,7 @@ interface StepInfo {
   id: number;
   titulo: string;
   subtitulo: string;
-  icone: any;
+  icone: React.ComponentType<{ className?: string }>;
   categoria: string;
 }
 

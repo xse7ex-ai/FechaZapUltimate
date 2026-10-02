@@ -307,7 +307,7 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
                     </div>
 
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
                           {msg.clienteNome || 'Cliente WhatsApp'}
                         </span>
@@ -320,6 +320,17 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
                             Recebida
                           </span>
                         )}
+                        {/* Indicadores de Opt-in / Opt-out detectados no texto */}
+                        {['STOP', 'SAIR', 'PARAR', 'CANCELAR'].includes((msg.corpo || '').trim().toUpperCase()) && (
+                          <span className="inline-flex items-center text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                            Opt-out Solicitado
+                          </span>
+                        )}
+                        {['START', 'COMEÇAR', 'COMECAR', 'VOLTAR', 'SIM'].includes((msg.corpo || '').trim().toUpperCase()) && (
+                          <span className="inline-flex items-center text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                            Opt-in Reativado
+                          </span>
+                        )}
                         {!msg.lida && msg.direcao !== 'outbound' && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500 text-white uppercase tracking-wider">
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
@@ -328,15 +339,23 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex-wrap">
                         <span className="flex items-center gap-1">
                           <Phone className="w-3 h-3 text-slate-400" />
                           {formatPhone(msg.clienteTelefone)}
                         </span>
+                        {msg.phoneNumberId && (
+                          <>
+                            <span>•</span>
+                            <span className="font-mono text-[10px] text-slate-400">
+                              Canal: {msg.phoneNumberId}
+                            </span>
+                          </>
+                        )}
                         <span>•</span>
                         <span className="flex items-center gap-1 text-[11px]">
                           <Clock className="w-3 h-3 text-slate-400" />
-                          {formatMessageTime(msg.createdAt)}
+                          {formatMessageTime(msg.timestamp || msg.createdAt)}
                         </span>
                       </div>
                     </div>

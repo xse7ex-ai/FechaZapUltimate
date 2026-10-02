@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_connections (
   waba_id TEXT,
   phone_number_id TEXT NOT NULL,
   display_phone_number TEXT,
+  access_token_encrypted TEXT,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'revoked')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -114,6 +115,7 @@ CREATE TABLE IF NOT EXISTS public.mensagens_whatsapp (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   phone_number_id TEXT,
+  cliente_id TEXT REFERENCES public.clientes(id) ON DELETE SET NULL,
   cliente_telefone TEXT NOT NULL,
   cliente_nome TEXT,
   corpo TEXT NOT NULL,
@@ -122,6 +124,7 @@ CREATE TABLE IF NOT EXISTS public.mensagens_whatsapp (
   lida BOOLEAN NOT NULL DEFAULT false,
   wa_message_id TEXT UNIQUE,
   orcamento_id TEXT REFERENCES public.orcamentos(id) ON DELETE SET NULL,
+  timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -565,6 +568,11 @@ CREATE POLICY "Usuário visualiza suas próprias conexões"
   ON public.whatsapp_connections FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Usuário insere suas próprias conexões" ON public.whatsapp_connections;
+CREATE POLICY "Usuário insere suas próprias conexões"
+  ON public.whatsapp_connections FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
 DROP POLICY IF EXISTS "Usuário atualiza suas próprias conexões" ON public.whatsapp_connections;
 CREATE POLICY "Usuário atualiza suas próprias conexões"
   ON public.whatsapp_connections FOR UPDATE
@@ -576,63 +584,141 @@ CREATE POLICY "Usuário exclui suas próprias conexões"
   ON public.whatsapp_connections FOR DELETE
   USING (auth.uid() = user_id);
 
-GRANT SELECT, UPDATE, DELETE ON public.whatsapp_connections TO authenticated;
+-- SEGURANÇA MÁXIMA (Regra 9):
+-- O token de acesso NUNCA é exposto ao frontend.
+-- Revoga acesso à coluna sensível para conexões públicas/autenticadas.
+-- Somente o service_role das Edge Functions acessa o token protegido.
+REVOKE ALL (access_token_encrypted) ON public.whatsapp_connections FROM anon, authenticated;
+GRANT SELECT (id, user_id, waba_id, phone_number_id, display_phone_number, status, created_at, updated_at) ON public.whatsapp_connections TO authenticated;
+GRANT INSERT (user_id, waba_id, phone_number_id, display_phone_number, status) ON public.whatsapp_connections TO authenticated;
+GRANT UPDATE (waba_id, phone_number_id, display_phone_number, status) ON public.whatsapp_connections TO authenticated;
+GRANT DELETE ON public.whatsapp_connections TO authenticated;
 GRANT ALL ON public.whatsapp_connections TO service_role;
 
--- 14. Função Auxiliar: Descoberta do Prestador (Dono) de Mensagem Inbound
--- Compara o telefone recebido com 'cliente_telefone' em orcamentos ou 'telefone' em clientes.
--- Se houver colisão de clientes em prestadores diferentes, prioriza o cadastro/orçamento mais recente.
-CREATE OR REPLACE FUNCTION public.find_whatsapp_message_owner(p_clean_phone TEXT)
-RETURNS TABLE (
-  user_id UUID,
-  cliente_nome TEXT,
-  orcamento_id TEXT,
-  created_at TIMESTAMPTZ
-) AS $$
-DECLARE
-  v_phone_digits TEXT;
-  v_last_digits TEXT;
-BEGIN
-  -- Extrai apenas dígitos
-  v_phone_digits := regexp_replace(p_clean_phone, '\D', '', 'g');
+-- 14. Isolamento Multi-Tenant Estrito do WhatsApp
+-- NOTA DE ARQUITETURA E SEGURANÇA:
+-- A identificação do tenant em mensagens inbound ocorre EXCLUSIVAMENTE via:
+-- Meta webhook -> value.metadata.phone_number_id -> whatsapp_connections.phone_number_id -> user_id
+-- O mapeamento heurístico por telefone de cliente foi completamente revogado e descontinuado
+-- para evitar qualquer risco de cross-tenant leakage.
+DROP FUNCTION IF EXISTS public.find_whatsapp_message_owner(TEXT);
 
-  -- Normaliza para os últimos 8 dígitos para cobrir variações de DDD, 9º dígito e DDI
-  IF length(v_phone_digits) >= 8 THEN
-    v_last_digits := substring(v_phone_digits from length(v_phone_digits) - 7);
-  ELSE
-    v_last_digits := v_phone_digits;
+-- ==============================================================================
+-- 15. ARQUITETURA DE PLANOS, MONETIZAÇÃO & STRIPE (FASE 6/9)
+-- ==============================================================================
+-- Planos Oficiais: GRATUITO, PRO, TURBO
+-- A sincronização e aplicação do plano ocorre estritamente no backend.
+-- Nenhuma chamada do frontend pode alterar o plano diretamente.
+
+CREATE TABLE IF NOT EXISTS public.subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT UNIQUE,
+  plano TEXT NOT NULL DEFAULT 'GRATUITO' CHECK (plano IN ('GRATUITO', 'PRO', 'TURBO')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN (
+    'active',
+    'trialing',
+    'past_due',
+    'canceled',
+    'unpaid',
+    'incomplete',
+    'incomplete_expired',
+    'grace_period'
+  )),
+  current_period_start TIMESTAMPTZ,
+  current_period_end TIMESTAMPTZ,
+  trial_start TIMESTAMPTZ,
+  trial_end TIMESTAMPTZ,
+  cancel_at_period_end BOOLEAN NOT NULL DEFAULT false,
+  canceled_at TIMESTAMPTZ,
+  grace_period_end TIMESTAMPTZ,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.stripe_events (
+  id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON public.subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_sub_id ON public.subscriptions(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON public.subscriptions(status);
+CREATE INDEX IF NOT EXISTS idx_stripe_events_processed_at ON public.stripe_events(processed_at DESC);
+
+-- Função Server-Side para Determinar o Plano Efetivo do Usuário
+CREATE OR REPLACE FUNCTION public.calculate_effective_user_plan(p_user_id UUID)
+RETURNS TEXT AS $$
+DECLARE
+  v_sub RECORD;
+  v_effective_plan TEXT := 'GRATUITO';
+BEGIN
+  SELECT plano, status, grace_period_end, current_period_end
+  INTO v_sub
+  FROM public.subscriptions
+  WHERE user_id = p_user_id
+  ORDER BY created_at DESC
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN 'GRATUITO';
   END IF;
 
-  RETURN QUERY
-  WITH candidates AS (
-    -- Prioridade 1: Orçamentos vinculados
-    SELECT 
-      o.user_id,
-      o.cliente_nome,
-      o.id AS orcamento_id,
-      o.created_at,
-      1 AS priority
-    FROM public.orcamentos o
-    WHERE regexp_replace(o.cliente_telefone, '\D', '', 'g') LIKE '%' || v_last_digits
-    
-    UNION ALL
-    
-    -- Prioridade 2: Cadastro de Clientes
-    SELECT 
-      c.user_id,
-      c.nome AS cliente_nome,
-      NULL::TEXT AS orcamento_id,
-      c.created_at,
-      2 AS priority
-    FROM public.clientes c
-    WHERE regexp_replace(c.telefone, '\D', '', 'g') LIKE '%' || v_last_digits
-  )
-  SELECT c.user_id, c.cliente_nome, c.orcamento_id, c.created_at
-  FROM candidates c
-  ORDER BY c.created_at DESC, c.priority ASC
-  LIMIT 1;
+  IF v_sub.status IN ('active', 'trialing') THEN
+    v_effective_plan := v_sub.plano;
+  ELSIF v_sub.status = 'grace_period' OR (v_sub.status = 'past_due' AND v_sub.grace_period_end IS NOT NULL AND v_sub.grace_period_end > NOW()) THEN
+    v_effective_plan := v_sub.plano;
+  ELSE
+    v_effective_plan := 'GRATUITO';
+  END IF;
+
+  RETURN v_effective_plan;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
-REVOKE ALL ON FUNCTION public.find_whatsapp_message_owner(TEXT) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.find_whatsapp_message_owner(TEXT) TO service_role;
+-- Sincronização automática de profiles.plano a partir do status da assinatura
+CREATE OR REPLACE FUNCTION public.sync_profile_from_subscription()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_effective TEXT;
+BEGIN
+  v_effective := public.calculate_effective_user_plan(NEW.user_id);
+
+  UPDATE public.profiles
+  SET plano = v_effective,
+      updated_at = NOW()
+  WHERE id = NEW.user_id;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_sync_profile_from_subscription ON public.subscriptions;
+CREATE TRIGGER trg_sync_profile_from_subscription
+  AFTER INSERT OR UPDATE ON public.subscriptions
+  FOR EACH ROW EXECUTE FUNCTION public.sync_profile_from_subscription();
+
+-- RLS e Segurança
+ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.stripe_events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Usuário visualiza sua assinatura" ON public.subscriptions;
+CREATE POLICY "Usuário visualiza sua assinatura"
+  ON public.subscriptions FOR SELECT
+  USING (auth.uid() = user_id);
+
+REVOKE INSERT, UPDATE, DELETE ON public.subscriptions FROM anon, authenticated, PUBLIC;
+GRANT SELECT ON public.subscriptions TO authenticated;
+GRANT ALL ON public.subscriptions TO service_role;
+
+REVOKE ALL ON public.stripe_events FROM anon, authenticated, PUBLIC;
+GRANT ALL ON public.stripe_events TO service_role;
+
+-- Revogação estrita de update da coluna plano por usuários comuns no profiles
+REVOKE UPDATE (plano) ON public.profiles FROM anon, authenticated;
+GRANT UPDATE (nome, empresa_nome, whatsapp) ON public.profiles TO authenticated;
+

@@ -70,7 +70,14 @@ export const ModalDetalhes: React.FC<ModalDetalhesProps> = ({
       onOpenPerfil?.();
       return;
     }
-    imprimirOrcamento(orcamento, empresa);
+    const opened = imprimirOrcamento(orcamento, empresa);
+    if (!opened) {
+      onShowToast(
+        'Janela bloqueada',
+        'Por favor, permita pop-ups no seu navegador para imprimir ou gerar o PDF da proposta.',
+        'warning'
+      );
+    }
   };
 
   return (

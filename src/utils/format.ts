@@ -21,11 +21,20 @@ export function formatDate(dateString: string): string {
 }
 
 export function cleanPhone(phone: string): string {
-  return phone.replace(/\D/g, '');
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length >= 10 && digits.length <= 11 && !digits.startsWith('55')) {
+    return `55${digits}`;
+  }
+  return digits;
 }
 
 export function formatPhone(phone: string): string {
-  const digits = cleanPhone(phone);
+  if (!phone) return '';
+  let digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+    digits = digits.slice(2);
+  }
   if (digits.length === 11) {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   }

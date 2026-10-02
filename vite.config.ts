@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vite';
 
-const currentDir = typeof import.meta.dirname !== 'undefined' ? import.meta.dirname : __dirname;
+const currentDir = typeof import.meta.dirname !== 'undefined' ? import.meta.dirname : process.cwd();
 
 export default defineConfig(() => {
   return {
@@ -11,6 +11,29 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(currentDir, '.'),
+      },
+    },
+    build: {
+      chunkSizeWarningLimit: 800,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('recharts') || id.includes('d3-')) {
+                return 'vendor-recharts';
+              }
+              if (id.includes('motion')) {
+                return 'vendor-motion';
+              }
+              if (id.includes('lucide-react')) {
+                return 'vendor-icons';
+              }
+              if (id.includes('i18next')) {
+                return 'vendor-i18n';
+              }
+            }
+          },
+        },
       },
     },
     server: {

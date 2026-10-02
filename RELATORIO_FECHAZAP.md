@@ -52,7 +52,7 @@ Para fechar o ciclo de vendas dos usuários do plano **TURBO**, foi criada a Edg
    - **Validação Criptográfica:** Valida o cabeçalho `X-Hub-Signature-256` via HMAC-SHA256 usando o segredo `WHATSAPP_APP_SECRET`.
    - **Resiliência e SLA:** Responde HTTP 200 rapidamente à Meta para evitar reenvios desnecessários ou desativação do webhook.
    - **Idempotência Rigorosa:** Utiliza `wa_message_id` (ID oficial da mensagem gerado pela Meta) para ignorar mensagens já processadas.
-   - **Descoberta do Dono (Prestador):** Compara o telefone do remetente (normalizado com DDI 55) com `cliente_telefone` na tabela `orcamentos` e `telefone` na tabela `clientes`. Se não encontrar nenhum prestador cadastrado, descarta a mensagem silenciosamente sem poluir o sistema.
+   - **Descoberta do Dono (Multi-Tenant Estrito):** Mapeia o destinatário comercial diretamente a partir de `value.metadata.phone_number_id` cruzado com conexões ativas em `public.whatsapp_connections`. Elimina qualquer risco de vazamento cross-tenant e descarta mensagens de números não vinculados a uma conta ativa.
    - **Gravação Segura:** Insere na tabela `public.mensagens_whatsapp` via credencial `service_role`.
 
 ---

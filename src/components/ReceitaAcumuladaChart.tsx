@@ -108,7 +108,13 @@ export const ReceitaAcumuladaChart: React.FC<ReceitaAcumuladaChartProps> = ({ or
       : 0;
 
   // Custom Tooltip do Recharts
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  interface CustomTooltipProps {
+    active?: boolean;
+    payload?: Array<{ payload: MesData }>;
+    label?: string;
+  }
+
+  const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       const data: MesData = payload[0].payload;
       return (

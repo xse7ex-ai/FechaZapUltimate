@@ -2,7 +2,7 @@
 // Receptor Inbound de Mensagens do WhatsApp Cloud API (Meta)
 // Arquitetura Multi-Tenant & Hardening de Segurança
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { getCorsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 /**
@@ -59,13 +59,35 @@ async function verifyMetaHmac(
   }
 }
 
-// Palavras-chave normatizadas para cancelamento proativo (Opt-out)
-const OPT_OUT_KEYWORDS = ['STOP', 'SAIR', 'PARAR', 'CANCELAR'];
+// Palavras-chave normatizadas para cancelamento proativo (Opt-out) e reativação (Opt-in)
+const OPT_OUT_KEYWORDS = [
+  'STOP',
+  'SAIR',
+  'PARAR',
+  'CANCELAR',
+  'DESCADASTRAR',
+  'DESATIVAR',
+  'UNSUBSCRIBE',
+  'NÃO QUERO MAIS',
+  'NAO QUERO MAIS',
+];
+
+const OPT_IN_KEYWORDS = [
+  'START',
+  'COMECAR',
+  'COMEÇAR',
+  'VOLTAR',
+  'SIM',
+  'ATIVAR',
+  'REATIVAR',
+];
 
 Deno.serve(async (req) => {
+  const currentCorsHeaders = getCorsHeaders(req);
+
   // CORS Preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: currentCorsHeaders });
   }
 
   const url = new URL(req.url);
@@ -218,45 +240,27 @@ Deno.serve(async (req) => {
             const cleanFrom = cleanPhoneNumber(fromRaw);
 
             // =========================================================================
-            // ROTEAMENTO MULTI-TENANT SEGURO (Baseado em phone_number_id)
+            // ROTEAMENTO MULTI-TENANT SEGURO (Baseado estritamente em phone_number_id)
             // =========================================================================
-            let ownerUserId: string | null = null;
-
-            if (phoneNumberId) {
-              const { data: conn } = await supabaseAdmin
-                .from('whatsapp_connections')
-                .select('user_id, status')
-                .eq('phone_number_id', phoneNumberId)
-                .eq('status', 'active')
-                .maybeSingle();
-
-              if (conn?.user_id) {
-                ownerUserId = conn.user_id;
-              }
+            if (!phoneNumberId) {
+              console.warn('[whatsapp-webhook] Mensagem descartada: metadata.phone_number_id ausente.');
+              continue;
             }
 
-            // Fallback de compatibilidade temporária exclusivamente se houver apenas 1 conexão central
-            if (!ownerUserId && phoneNumberId) {
-              const centralPhoneId = Deno.env.get('PHONE_NUMBER_ID');
-              if (centralPhoneId && centralPhoneId === phoneNumberId) {
-                // Se o servidor opera em modo central e houver apenas 1 perfil TURBO cadastrado
-                const { data: turboProfiles } = await supabaseAdmin
-                  .from('profiles')
-                  .select('id')
-                  .eq('plano', 'TURBO')
-                  .limit(2);
+            const { data: conn } = await supabaseAdmin
+              .from('whatsapp_connections')
+              .select('user_id, status')
+              .eq('phone_number_id', phoneNumberId)
+              .eq('status', 'active')
+              .maybeSingle();
 
-                if (turboProfiles && turboProfiles.length === 1) {
-                  ownerUserId = turboProfiles[0].id;
-                }
-              }
-            }
+            const ownerUserId = conn?.user_id || null;
 
-            // Se NÃO foi possível determinar o tenant com segurança absoluta:
-            // NUNCA adivinhar pelo telefone do cliente. Descarta com log técnico.
+            // Se não existir conexão ativa correspondente em whatsapp_connections:
+            // NÃO inserir mensagem, NÃO procurar dono pelo telefone, NÃO escolher usuário TURBO, NÃO usar fallback central.
             if (!ownerUserId) {
               console.warn(
-                `[whatsapp-webhook] Tenant não identificado para phone_number_id="${phoneNumberId}". Mensagem descartada por segurança.`
+                `[whatsapp-webhook] Nenhuma conexão ativa encontrada para phone_number_id="${phoneNumberId}". Mensagem descartada por segurança.`
               );
               continue;
             }
@@ -306,15 +310,29 @@ Deno.serve(async (req) => {
             // =========================================================================
             const normalizedCorpo = corpoTexto.trim().toUpperCase();
             const isOptOut = OPT_OUT_KEYWORDS.includes(normalizedCorpo);
+            const isOptIn = OPT_IN_KEYWORDS.includes(normalizedCorpo);
 
             if (matchedClienteId) {
               if (isOptOut) {
-                console.log(`[whatsapp-webhook] Solicitação de descadastro (opt-out) detectada do cliente ${matchedClienteId}`);
+                console.log(`[whatsapp-webhook] Solicitação de descadastro (opt-out) do cliente ${matchedClienteId}`);
                 await supabaseAdmin
                   .from('clientes')
                   .update({
                     whatsapp_opt_in: false,
                     whatsapp_opt_out_at: new Date().toISOString(),
+                    last_inbound_at: new Date().toISOString(),
+                  })
+                  .eq('id', matchedClienteId)
+                  .eq('user_id', ownerUserId);
+              } else if (isOptIn) {
+                console.log(`[whatsapp-webhook] Reativação de cadastro (opt-in) do cliente ${matchedClienteId}`);
+                await supabaseAdmin
+                  .from('clientes')
+                  .update({
+                    whatsapp_opt_in: true,
+                    whatsapp_opt_in_at: new Date().toISOString(),
+                    whatsapp_opt_in_source: 'whatsapp_inbound',
+                    whatsapp_opt_out_at: null,
                     last_inbound_at: new Date().toISOString(),
                   })
                   .eq('id', matchedClienteId)
@@ -330,12 +348,22 @@ Deno.serve(async (req) => {
               }
             }
 
+            // Tratamento do timestamp original da Meta (epoch seconds)
+            let msgTimestamp = new Date().toISOString();
+            if (msg.timestamp) {
+              const parsedEpoch = parseInt(String(msg.timestamp), 10);
+              if (!isNaN(parsedEpoch) && parsedEpoch > 0) {
+                msgTimestamp = new Date(parsedEpoch * 1000).toISOString();
+              }
+            }
+
             // Gravação segura na tabela public.mensagens_whatsapp com RLS service_role
             const nomeFinal = contactName || ownerClienteNome || 'Cliente WhatsApp';
 
             const { error: insertErr } = await supabaseAdmin.from('mensagens_whatsapp').insert({
               user_id: ownerUserId,
               phone_number_id: phoneNumberId,
+              cliente_id: matchedClienteId,
               cliente_telefone: cleanFrom,
               cliente_nome: nomeFinal,
               corpo: corpoTexto,
@@ -344,12 +372,40 @@ Deno.serve(async (req) => {
               lida: false,
               wa_message_id: waMessageId,
               orcamento_id: ownerOrcamentoId,
+              timestamp: msgTimestamp,
             });
 
             if (insertErr) {
               console.error('[whatsapp-webhook] Erro ao gravar mensagem no banco:', insertErr);
             } else {
               processedCount++;
+            }
+          }
+
+          // =========================================================================
+          // Processamento de Recibos e Atualizações de Status (value.statuses)
+          // =========================================================================
+          const statuses = value.statuses || [];
+          for (const st of statuses) {
+            const statusWaId = st.id;
+            const statusType = st.status; // 'sent' | 'delivered' | 'read' | 'failed'
+            if (statusWaId && statusType) {
+              await supabaseAdmin
+                .from('mensagens_whatsapp')
+                .update({ status: statusType })
+                .eq('wa_message_id', statusWaId);
+            }
+
+            // Detecção de token revogado / expirado (código 190 da Meta)
+            const errors = st.errors || [];
+            for (const err of errors) {
+              if (err.code === 190 && phoneNumberId) {
+                console.warn(`[whatsapp-webhook] Meta token revogado/expirado para phone_number_id=${phoneNumberId}`);
+                await supabaseAdmin
+                  .from('whatsapp_connections')
+                  .update({ status: 'revoked', updated_at: new Date().toISOString() })
+                  .eq('phone_number_id', phoneNumberId);
+              }
             }
           }
         }

@@ -6,7 +6,7 @@
 export interface SWRegistrationCallbacks {
   onSuccess?: (registration: ServiceWorkerRegistration) => void;
   onUpdate?: (registration: ServiceWorkerRegistration) => void;
-  onError?: (error: any) => void;
+  onError?: (error: unknown) => void;
 }
 
 export function registerServiceWorker(callbacks?: SWRegistrationCallbacks): void {

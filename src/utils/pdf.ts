@@ -1,22 +1,51 @@
 import { Orcamento, ConfiguracaoEmpresa } from '../types';
 import { formatCurrency, formatDate, formatPhone, formatDocument } from './format';
 
-export function imprimirOrcamento(orcamento: Orcamento, empresa: ConfiguracaoEmpresa): void {
-  const printWindow = window.open('', '_blank', 'width=800,height=900');
-  if (!printWindow) {
-    alert('Por favor, permita pop-ups para imprimir o orçamento.');
-    return;
-  }
+/**
+ * Sanitiza valores de texto para evitar vulnerabilidades de XSS na janela de impressão/PDF.
+ */
+function escapeHtml(text: unknown): string {
+  if (text === null || text === undefined) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
-  const itemsRows = orcamento.itens
+export function generateOrcamentoPrintHtml(orcamento: Orcamento, empresa: ConfiguracaoEmpresa): string {
+
+  const safeClienteNome = escapeHtml(orcamento.clienteNome || 'Cliente');
+  const safeNumero = escapeHtml(orcamento.numero || '1');
+  const safeStatus = escapeHtml(orcamento.status || 'pendente');
+  const safeFormaPagamento = escapeHtml(orcamento.formaPagamento || 'A combinar');
+  const safePrazoEntrega = escapeHtml(orcamento.prazoEntrega || 'A combinar');
+  const safeObservacoes = escapeHtml(orcamento.observacoes || '');
+  const safeTermosGarantia = escapeHtml(
+    orcamento.termosGarantia ||
+      'Garantia de qualidade e atendimento conforme especificações acima. Proposta sujeita a disponibilidade de agenda.'
+  );
+
+  const safeEmpresaNome = escapeHtml(empresa.nomeFantasia || 'Prestador de Serviços');
+  const safeRazaoSocial = escapeHtml(empresa.razaoSocial || '');
+  const safeCnpj = empresa.cnpj ? formatDocument(empresa.cnpj) : '';
+  const safeTelefone = formatPhone(empresa.telefone || '');
+  const safeEmail = escapeHtml(empresa.email || '');
+  const safeEndereco = escapeHtml(empresa.endereco || '');
+  const safeCidadeEstado = escapeHtml(empresa.cidadeEstado || '');
+  const safeChavePix = escapeHtml(empresa.chavePix || '');
+  const safeTipoChavePix = escapeHtml((empresa.tipoChavePix || 'cpf').toUpperCase());
+
+  const itemsRows = (orcamento.itens || [])
     .map(
       (item, idx) => `
-    <tr style="border-bottom: 1px solid #e2e8f0;">
+    <tr style="border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">
       <td style="padding: 10px 8px; text-align: center; color: #64748b;">${idx + 1}</td>
-      <td style="padding: 10px 8px; font-weight: 500; color: #1e293b;">${item.descricao}</td>
-      <td style="padding: 10px 8px; text-align: center; color: #334155;">${item.quantidade}</td>
-      <td style="padding: 10px 8px; text-align: right; color: #334155;">${formatCurrency(item.valorUnitario)}</td>
-      <td style="padding: 10px 8px; text-align: right; font-weight: 600; color: #0f172a;">${formatCurrency(item.total)}</td>
+      <td style="padding: 10px 8px; font-weight: 500; color: #1e293b; overflow-wrap: break-word; word-break: break-word;">${escapeHtml(item.descricao)}</td>
+      <td style="padding: 10px 8px; text-align: center; color: #334155;">${Number(item.quantidade) || 0}</td>
+      <td style="padding: 10px 8px; text-align: right; color: #334155;">${formatCurrency(item.valorUnitario ?? 0)}</td>
+      <td style="padding: 10px 8px; text-align: right; font-weight: 600; color: #0f172a;">${formatCurrency(item.total ?? 0)}</td>
     </tr>
   `
     )
@@ -24,13 +53,14 @@ export function imprimirOrcamento(orcamento: Orcamento, empresa: ConfiguracaoEmp
 
   let descontoRow = '';
   if (orcamento.descontoValor > 0) {
-    const descDisplay = orcamento.descontoTipo === 'porcentagem'
-      ? `${orcamento.descontoValor}% (-${formatCurrency(orcamento.subtotal - orcamento.valorTotal)})`
-      : formatCurrency(orcamento.descontoValor);
+    const descDisplay =
+      orcamento.descontoTipo === 'porcentagem'
+        ? `${orcamento.descontoValor}% (-${formatCurrency(orcamento.subtotal - orcamento.valorTotal)})`
+        : formatCurrency(orcamento.descontoValor);
     descontoRow = `
       <tr>
         <td colspan="4" style="text-align: right; padding: 6px 8px; color: #e11d48; font-weight: 500;">Desconto Especial:</td>
-        <td style="text-align: right; padding: 6px 8px; color: #e11d48; font-weight: 600;">-${descDisplay}</td>
+        <td style="text-align: right; padding: 6px 8px; color: #e11d48; font-weight: 600;">-${escapeHtml(descDisplay)}</td>
       </tr>
     `;
   }
@@ -40,7 +70,7 @@ export function imprimirOrcamento(orcamento: Orcamento, empresa: ConfiguracaoEmp
     <html lang="pt-BR">
     <head>
       <meta charset="utf-8">
-      <title>Orçamento #${orcamento.numero} - ${orcamento.clienteNome}</title>
+      <title>Orçamento #${safeNumero} - ${safeClienteNome}</title>
       <style>
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -64,6 +94,7 @@ export function imprimirOrcamento(orcamento: Orcamento, empresa: ConfiguracaoEmp
           font-weight: 800;
           color: #1e3a8a;
           margin: 0 0 4px 0;
+          overflow-wrap: break-word;
         }
         .badge {
           display: inline-block;
@@ -86,6 +117,8 @@ export function imprimirOrcamento(orcamento: Orcamento, empresa: ConfiguracaoEmp
           padding: 16px;
           border-radius: 8px;
           border: 1px solid #e2e8f0;
+          page-break-inside: avoid;
+          break-inside: avoid;
         }
         table {
           width: 100%;
@@ -107,6 +140,8 @@ export function imprimirOrcamento(orcamento: Orcamento, empresa: ConfiguracaoEmp
           padding: 16px;
           border-radius: 8px;
           border: 1px solid #cbd5e1;
+          page-break-inside: avoid;
+          break-inside: avoid;
         }
         .footer-terms {
           margin-top: 36px;
@@ -114,45 +149,59 @@ export function imprimirOrcamento(orcamento: Orcamento, empresa: ConfiguracaoEmp
           border-top: 1px dashed #cbd5e1;
           font-size: 12px;
           color: #64748b;
+          page-break-inside: avoid;
+          break-inside: avoid;
+          overflow-wrap: break-word;
         }
         @media print {
           body { padding: 10mm; }
           .no-print { display: none; }
+          tr, .total-box, .grid-info, .footer-terms {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
         }
       </style>
     </head>
     <body>
       <div class="header">
         <div>
-          <h1 class="company-title">${empresa.nomeFantasia || 'Prestador de Serviços'}</h1>
-          <div style="color: #64748b; font-size: 13px;">
-            ${empresa.razaoSocial ? `${empresa.razaoSocial} | ` : ''}
-            ${empresa.cnpj ? `CNPJ: ${formatDocument(empresa.cnpj)} | ` : ''}
-            Tel: ${formatPhone(empresa.telefone || '')}
+          <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 6px;">
+            ${
+              empresa.logoUrl
+                ? `<img src="${escapeHtml(empresa.logoUrl)}" alt="Logo" style="max-height: 52px; max-width: 140px; object-fit: contain; border-radius: 6px;" />`
+                : ''
+            }
+            <h1 class="company-title" style="margin: 0;">${safeEmpresaNome}</h1>
           </div>
           <div style="color: #64748b; font-size: 13px;">
-            ${empresa.email ? `Email: ${empresa.email} | ` : ''}
-            ${empresa.endereco ? `${empresa.endereco} - ${empresa.cidadeEstado}` : ''}
+            ${safeRazaoSocial ? `${safeRazaoSocial} | ` : ''}
+            ${safeCnpj ? `CNPJ: ${safeCnpj} | ` : ''}
+            Tel: ${safeTelefone}
+          </div>
+          <div style="color: #64748b; font-size: 13px;">
+            ${safeEmail ? `Email: ${safeEmail} | ` : ''}
+            ${safeEndereco ? `${safeEndereco} - ${safeCidadeEstado}` : ''}
           </div>
         </div>
         <div style="text-align: right;">
-          <div style="font-size: 20px; font-weight: 800; color: #2563eb;">ORÇAMENTO #${orcamento.numero}</div>
+          <div style="font-size: 20px; font-weight: 800; color: #2563eb;">ORÇAMENTO #${safeNumero}</div>
           <div style="color: #64748b; font-size: 13px; margin: 4px 0;">Emissão: ${formatDate(orcamento.dataCriacao)}</div>
-          <span class="badge badge-${orcamento.status}">${orcamento.status}</span>
+          <span class="badge badge-${safeStatus}">${safeStatus}</span>
         </div>
       </div>
 
       <div class="grid-info">
         <div>
           <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">DADOS DO CLIENTE</div>
-          <div style="font-size: 16px; font-weight: 700; color: #0f172a;">${orcamento.clienteNome}</div>
+          <div style="font-size: 16px; font-weight: 700; color: #0f172a; overflow-wrap: break-word;">${safeClienteNome}</div>
           <div style="color: #334155; font-size: 13px;">WhatsApp/Tel: ${formatPhone(orcamento.clienteTelefone)}</div>
         </div>
         <div style="text-align: right;">
           <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">CONDIÇÕES & PRAZOS</div>
           <div style="color: #334155; font-size: 13px;">Validade: <strong>${formatDate(orcamento.dataValidade)}</strong></div>
-          <div style="color: #334155; font-size: 13px;">Pagamento: <strong>${orcamento.formaPagamento || 'A combinar'}</strong></div>
-          <div style="color: #334155; font-size: 13px;">Prazo de entrega: <strong>${orcamento.prazoEntrega || 'A combinar'}</strong></div>
+          <div style="color: #334155; font-size: 13px;">Pagamento: <strong>${safeFormaPagamento}</strong></div>
+          <div style="color: #334155; font-size: 13px;">Prazo de entrega: <strong>${safePrazoEntrega}</strong></div>
         </div>
       </div>
 
@@ -167,7 +216,7 @@ export function imprimirOrcamento(orcamento: Orcamento, empresa: ConfiguracaoEmp
           </tr>
         </thead>
         <tbody>
-          ${itemsRows}
+          ${itemsRows || '<tr><td colspan="5" style="text-align:center; padding: 16px; color: #94a3b8;">Nenhum item adicionado à proposta.</td></tr>'}
         </tbody>
       </table>
 
@@ -186,32 +235,32 @@ export function imprimirOrcamento(orcamento: Orcamento, empresa: ConfiguracaoEmp
       </div>
 
       ${
-        empresa.chavePix
+        safeChavePix
           ? `
-        <div style="margin-top: 24px; padding: 14px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px;">
+        <div style="margin-top: 24px; padding: 14px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; page-break-inside: avoid; break-inside: avoid;">
           <strong style="color: #065f46;">Dados para Pagamento via PIX:</strong>
-          <div style="color: #047857; margin-top: 4px;">Chave (${empresa.tipoChavePix.toUpperCase()}): <code>${empresa.chavePix}</code></div>
-          <div style="color: #065f46; font-size: 12px; margin-top: 2px;">Favorecido: ${empresa.nomeFantasia}</div>
+          <div style="color: #047857; margin-top: 4px; overflow-wrap: break-word;">Chave (${safeTipoChavePix}): <code>${safeChavePix}</code></div>
+          <div style="color: #065f46; font-size: 12px; margin-top: 2px;">Favorecido: ${safeEmpresaNome}</div>
         </div>
       `
           : ''
       }
 
       ${
-        orcamento.observacoes
+        safeObservacoes
           ? `
-        <div style="margin-top: 20px;">
+        <div style="margin-top: 20px; page-break-inside: avoid; break-inside: avoid;">
           <strong style="color: #475569; font-size: 13px;">Observações Importantes:</strong>
-          <p style="margin: 4px 0 0 0; color: #334155; font-size: 13px; white-space: pre-line;">${orcamento.observacoes}</p>
+          <p style="margin: 4px 0 0 0; color: #334155; font-size: 13px; white-space: pre-line; overflow-wrap: break-word;">${safeObservacoes}</p>
         </div>
       `
           : ''
       }
 
       <div class="footer-terms">
-        ${orcamento.termosGarantia || 'Garantia de qualidade e atendimento conforme especificações acima. Proposta sujeita a disponibilidade de agenda.'}
+        ${safeTermosGarantia}
         <div style="margin-top: 8px; font-size: 11px; text-align: center; color: #94a3b8;">
-          Documento gerado pelo FechaZap 3.1.2 - Inteligência Artificial para Fechamento de Vendas
+          Documento gerado pelo FechaZap 3.3.0 - Inteligência Comercial para Fechamento de Vendas
         </div>
       </div>
 
@@ -224,7 +273,20 @@ export function imprimirOrcamento(orcamento: Orcamento, empresa: ConfiguracaoEmp
     </html>
   `;
 
+  return htmlContent;
+}
+
+export function imprimirOrcamento(orcamento: Orcamento, empresa: ConfiguracaoEmpresa): boolean {
+  const printWindow = window.open('', '_blank', 'width=800,height=900');
+  if (!printWindow) {
+    console.warn('[FechaZap PDF] Falha ao abrir janela de impressão. Bloqueador de pop-ups ativo.');
+    return false;
+  }
+
+  const htmlContent = generateOrcamentoPrintHtml(orcamento, empresa);
   printWindow.document.open();
   printWindow.document.write(htmlContent);
   printWindow.document.close();
+  return true;
 }
+
