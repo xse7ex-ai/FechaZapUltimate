@@ -27,6 +27,8 @@ import {
   logoutUser,
   isSupabaseConfigured,
   attemptClientSidePlanChange,
+  createCheckoutSession,
+  createPortalSession,
 } from '../utils/supabase';
 
 interface ModalPerfilUsuarioProps {
@@ -59,6 +61,53 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
     status: 'neutral' | 'blocked' | 'error';
     message: string;
   } | null>(null);
+
+  // Stripe Checkout & Portal state
+  const [startingCheckout, setStartingCheckout] = useState<'PRO' | 'TURBO' | null>(null);
+  const [openingPortal, setOpeningPortal] = useState<boolean>(false);
+
+  const handleStartCheckout = async (plano: 'PRO' | 'TURBO') => {
+    if (!isAuthenticated) {
+      onShowToast('Autenticação necessária', 'Crie uma conta ou faça login antes de assinar.', 'info');
+      setIsRegisterMode(true);
+      return;
+    }
+
+    setStartingCheckout(plano);
+    try {
+      const res = await createCheckoutSession(plano);
+      if (res.success && res.url) {
+        window.location.href = res.url;
+      } else {
+        onShowToast('Falha ao iniciar checkout', res.error || 'Não foi possível gerar a sessão de pagamento.', 'error');
+      }
+    } catch (err: any) {
+      onShowToast('Erro de conexão', err?.message || 'Falha ao comunicar com o servidor de pagamentos.', 'error');
+    } finally {
+      setStartingCheckout(null);
+    }
+  };
+
+  const handleOpenPortal = async () => {
+    if (!isAuthenticated) {
+      onShowToast('Autenticação necessária', 'Faça login para gerenciar sua assinatura.', 'info');
+      return;
+    }
+
+    setOpeningPortal(true);
+    try {
+      const res = await createPortalSession();
+      if (res.success && res.url) {
+        window.location.href = res.url;
+      } else {
+        onShowToast('Portal indisponível', res.error || 'Não foi possível abrir o portal de assinaturas.', 'error');
+      }
+    } catch (err: any) {
+      onShowToast('Erro de conexão', err?.message || 'Falha ao acessar o portal do Stripe.', 'error');
+    } finally {
+      setOpeningPortal(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -375,6 +424,34 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
               </span>
             </div>
 
+            {/* Banner de Gerenciamento de Assinatura (exclusivo para PRO e TURBO) */}
+            {(currentPlano === 'PRO' || currentPlano === 'TURBO') && (
+              <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-950/40 dark:to-slate-800/80 border border-emerald-200 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <span>Assinatura Ativa: Plano {currentPlano}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Altere dados de pagamento, consulte notas fiscais ou gerencie o plano no Stripe.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenPortal}
+                  disabled={openingPortal}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shrink-0 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-xs"
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>{openingPortal ? 'Abrindo...' : 'Gerenciar assinatura'}</span>
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* GRATUITO */}
               <div className={`p-4 rounded-xl border flex flex-col justify-between ${
@@ -471,16 +548,29 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
 
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-750">
                   {currentPlano === 'PRO' ? (
-                    <span className="block w-full text-[11px] font-bold text-emerald-600 dark:text-emerald-400 text-center py-1.5 bg-emerald-100 dark:bg-emerald-950/60 rounded-lg">
-                      Plano Atual
-                    </span>
+                    <div className="space-y-1.5">
+                      <span className="block w-full text-[11px] font-bold text-emerald-600 dark:text-emerald-400 text-center py-1 bg-emerald-100 dark:bg-emerald-950/60 rounded-lg">
+                        Plano Atual
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleOpenPortal}
+                        disabled={openingPortal}
+                        className="w-full py-1.5 px-3 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        <span>{openingPortal ? 'Carregando...' : 'Gerenciar assinatura'}</span>
+                      </button>
+                    </div>
                   ) : (
                     <button
-                      onClick={() => onShowToast('Assinatura PRO', 'A cobrança oficial será processada via Stripe Checkout com ativação automática por webhook seguro.', 'info')}
-                      className="w-full py-1.5 px-3 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center justify-center gap-1"
+                      type="button"
+                      onClick={() => handleStartCheckout('PRO')}
+                      disabled={startingCheckout === 'PRO'}
+                      className="w-full py-1.5 px-3 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
                     >
                       <CreditCard className="w-3.5 h-3.5" />
-                      <span>Escolher PRO</span>
+                      <span>{startingCheckout === 'PRO' ? 'Processando...' : 'Assinar PRO'}</span>
                     </button>
                   )}
                 </div>
@@ -532,16 +622,29 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
 
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-750">
                   {currentPlano === 'TURBO' ? (
-                    <span className="block w-full text-[11px] font-bold text-amber-600 dark:text-amber-400 text-center py-1.5 bg-amber-100 dark:bg-amber-950/60 rounded-lg">
-                      Plano Atual
-                    </span>
+                    <div className="space-y-1.5">
+                      <span className="block w-full text-[11px] font-bold text-amber-600 dark:text-amber-400 text-center py-1 bg-amber-100 dark:bg-amber-950/60 rounded-lg">
+                        Plano Atual
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleOpenPortal}
+                        disabled={openingPortal}
+                        className="w-full py-1.5 px-3 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        <span>{openingPortal ? 'Carregando...' : 'Gerenciar assinatura'}</span>
+                      </button>
+                    </div>
                   ) : (
                     <button
-                      onClick={() => onShowToast('Assinatura TURBO', 'A ativação do plano TURBO é autorizada exclusivamente via Stripe Webhook seguro com sincronização imediata no Supabase.', 'info')}
-                      className="w-full py-1.5 px-3 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 transition-colors flex items-center justify-center gap-1 shadow-xs"
+                      type="button"
+                      onClick={() => handleStartCheckout('TURBO')}
+                      disabled={startingCheckout === 'TURBO'}
+                      className="w-full py-1.5 px-3 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer disabled:opacity-50"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>Escolher TURBO</span>
+                      <span>{startingCheckout === 'TURBO' ? 'Processando...' : 'Assinar TURBO'}</span>
                     </button>
                   )}
                 </div>

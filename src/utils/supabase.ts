@@ -671,4 +671,58 @@ export async function checkAndConsumeGratuitoQuota(): Promise<QuotaConsumeResult
   }
 }
 
+/**
+ * Inicia sessão de Stripe Checkout chamando a Edge Function create-checkout-session
+ */
+export async function createCheckoutSession(
+  plano: 'PRO' | 'TURBO'
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  if (!client) {
+    return { success: false, error: 'Supabase client não configurado no app.' };
+  }
+
+  const res = await invokeEdgeFunction<{ success: boolean; url?: string; error?: string }>(
+    'create-checkout-session',
+    { plano }
+  );
+
+  if (res.error) {
+    return { success: false, error: res.error.message || 'Falha ao iniciar checkout.' };
+  }
+
+  if (!res.data?.success || !res.data?.url) {
+    return { success: false, error: res.data?.error || 'URL de checkout não retornada.' };
+  }
+
+  return { success: true, url: res.data.url };
+}
+
+/**
+ * Cria sessão do Stripe Billing Portal chamando a Edge Function create-portal-session
+ */
+export async function createPortalSession(): Promise<{
+  success: boolean;
+  url?: string;
+  error?: string;
+}> {
+  if (!client) {
+    return { success: false, error: 'Supabase client não configurado no app.' };
+  }
+
+  const res = await invokeEdgeFunction<{ success: boolean; url?: string; error?: string }>(
+    'create-portal-session'
+  );
+
+  if (res.error) {
+    return { success: false, error: res.error.message || 'Falha ao acessar portal de assinaturas.' };
+  }
+
+  if (!res.data?.success || !res.data?.url) {
+    return { success: false, error: res.data?.error || 'URL do portal não retornada.' };
+  }
+
+  return { success: true, url: res.data.url };
+}
+
+
 

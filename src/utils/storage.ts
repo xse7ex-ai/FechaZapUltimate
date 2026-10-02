@@ -112,7 +112,29 @@ export function saveUserClientes(userId: string | null | undefined, clientes: Cl
 // ==========================================
 export function loadUserEmpresa(userId: string | null | undefined): ConfiguracaoEmpresa {
   const key = getUserStorageKey(userId, 'empresa');
-  return getStorageItem<ConfiguracaoEmpresa>(key, INITIAL_EMPRESA_CONFIG);
+  const stored = getStorageItem<ConfiguracaoEmpresa | null>(key, null);
+  if (stored !== null && typeof stored === 'object') {
+    return stored;
+  }
+  // Se for visitante anônimo pela primeira vez, carrega dados de exemplo
+  if (!userId) {
+    return INITIAL_EMPRESA_CONFIG;
+  }
+  // Usuário autenticado sem configuração salva começa com campos vazios
+  return {
+    nomeFantasia: '',
+    razaoSocial: '',
+    cnpj: '',
+    telefone: '',
+    email: '',
+    chavePix: '',
+    tipoChavePix: 'cnpj',
+    endereco: '',
+    cidadeEstado: '',
+    logoUrl: '',
+    mensagemPadraoWhatsapp: INITIAL_EMPRESA_CONFIG.mensagemPadraoWhatsapp,
+    modeloIA: INITIAL_EMPRESA_CONFIG.modeloIA || 'gemini-3.8-flash',
+  };
 }
 
 export function saveUserEmpresa(userId: string | null | undefined, empresa: ConfiguracaoEmpresa): void {

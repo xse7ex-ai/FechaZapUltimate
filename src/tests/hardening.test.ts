@@ -6,6 +6,7 @@ import { mapDbToOrcamento, mapOrcamentoToDb, mapDbToCliente, mapClienteToDb } fr
 import { formatCurrency, formatPhone, cleanPhone } from '../utils/format';
 import { generateWhatsAppQuoteText, generateWhatsAppUrl } from '../utils/whatsapp';
 import { generateOrcamentoPrintHtml } from '../utils/pdf';
+import { loadUserEmpresa } from '../utils/storage';
 import { Orcamento, Cliente, ConfiguracaoEmpresa } from '../types';
 
 // ==============================================================================
@@ -222,6 +223,49 @@ describe('FechaZap - Suíte de Endurecimento Técnico (Fase 7/9)', () => {
       expect(planos.includes('PRO')).toBe(true);
       expect(planos.includes('TURBO')).toBe(true);
       expect(planos.includes('ENTERPRISE')).toBe(false);
+    });
+
+    it('loadUserEmpresa deve retornar dados de exemplo para visitante e campos vazios para usuário autenticado sem dados', () => {
+      // 1. Visitante anônimo (!userId): dados fictícios de exemplo (INITIAL_EMPRESA_CONFIG)
+      const anonEmpresa = loadUserEmpresa(null);
+      expect(anonEmpresa.nomeFantasia).toBe('Soluções Pro Serviços');
+      expect(anonEmpresa.cnpj).toBe('38192847000192');
+      expect(anonEmpresa.tipoChavePix).toBe('cnpj');
+
+      // 2. Usuário autenticado sem dados salvos: campos vazios, preservando padrões técnicos
+      const newAuthEmpresa = loadUserEmpresa('novo_usuario_autenticado_uuid_999');
+      expect(newAuthEmpresa.nomeFantasia).toBe('');
+      expect(newAuthEmpresa.razaoSocial).toBe('');
+      expect(newAuthEmpresa.cnpj).toBe('');
+      expect(newAuthEmpresa.telefone).toBe('');
+      expect(newAuthEmpresa.email).toBe('');
+      expect(newAuthEmpresa.chavePix).toBe('');
+      expect(newAuthEmpresa.endereco).toBe('');
+      expect(newAuthEmpresa.cidadeEstado).toBe('');
+      expect(newAuthEmpresa.tipoChavePix).toBe('cnpj');
+      expect(newAuthEmpresa.mensagemPadraoWhatsapp).toBeTruthy();
+      expect(newAuthEmpresa.modeloIA).toBe('gemini-3.8-flash');
+    });
+
+    it('parâmetros de Checkout Session devem propagar metadata do plano em ambos os níveis', () => {
+      const buildCheckoutParams = (userId: string, plano: 'PRO' | 'TURBO', priceId: string, customerId: string) => {
+        const params = new URLSearchParams();
+        params.append('customer', customerId);
+        params.append('client_reference_id', userId);
+        params.append('mode', 'subscription');
+        params.append('line_items[0][price]', priceId);
+        params.append('line_items[0][quantity]', '1');
+        params.append('metadata[plano]', plano);
+        params.append('subscription_data[metadata][plano]', plano);
+        return params;
+      };
+
+      const params = buildCheckoutParams('user_123', 'TURBO', 'price_turbo_xyz', 'cus_stripe_abc');
+      expect(params.get('client_reference_id')).toBe('user_123');
+      expect(params.get('customer')).toBe('cus_stripe_abc');
+      expect(params.get('metadata[plano]')).toBe('TURBO');
+      expect(params.get('subscription_data[metadata][plano]')).toBe('TURBO');
+      expect(params.get('mode')).toBe('subscription');
     });
   });
 
