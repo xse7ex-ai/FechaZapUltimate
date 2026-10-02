@@ -281,7 +281,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const appSecret = Deno.env.get('WHATSAPP_APP_SECRET') || '';
-    const centralPhoneId = Deno.env.get('PHONE_NUMBER_ID') || Deno.env.get('WHATSAPP_PHONE_NUMBER_ID') || '106934522435791';
+    const centralPhoneId = Deno.env.get('PHONE_NUMBER_ID') || Deno.env.get('WHATSAPP_PHONE_NUMBER_ID') || '';
 
     // SEGURANÇA CRÍTICA: Se o segredo do app não estiver configurado, falha fechado imediatamente
     if (!appSecret) {
@@ -416,7 +416,7 @@ Deno.serve(async (req) => {
               ownerUserId = conn.user_id;
             } else {
               // PASSO 2: Verificar se é o número central compartilhado do FechaZap
-              if (phoneNumberId !== centralPhoneId) {
+              if (!centralPhoneId || phoneNumberId !== centralPhoneId) {
                 console.warn(
                   `[whatsapp-webhook] Nenhuma conexão ativa encontrada para phone_number_id="${phoneNumberId}" e número não é o central. Mensagem descartada por segurança.`
                 );

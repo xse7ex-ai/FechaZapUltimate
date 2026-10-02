@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
       connectionMode = 'individual';
     } else {
       // PASSO 2: Fallback controlado para WhatsApp Central Compartilhado Autorizado
-      const centralPhoneId = centralServerPhoneId || '106934522435791';
+      const centralPhoneId = centralServerPhoneId || '';
       const centralToken = metaToken;
 
       if (!centralPhoneId || !centralToken) {
