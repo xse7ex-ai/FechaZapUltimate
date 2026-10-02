@@ -304,7 +304,19 @@ class MockPostgreSQLDatabase {
     switch (event.type) {
       case 'checkout.session.completed': {
         const userId = obj.client_reference_id;
-        const targetPlan = (obj.metadata?.plano || 'PRO') as TipoPlano;
+        const rawPlano = obj.metadata?.plano || obj.plan?.nickname;
+        let targetPlan: TipoPlano | null = null;
+        if (rawPlano) {
+          const upper = String(rawPlano).toUpperCase();
+          if (upper.includes('TURBO')) targetPlan = 'TURBO';
+          else if (upper.includes('PRO')) targetPlan = 'PRO';
+        }
+
+        // SEGURANÇA: Se o plano não for identificado, NÃO conceder PRO automaticamente
+        if (!targetPlan) {
+          return { status: 200, error: 'Plano não reconhecido. Nenhum plano atribuído.' };
+        }
+
         this.subscriptions.set(obj.subscription, {
           id: `sub_${Date.now()}`,
           userId,
@@ -562,6 +574,32 @@ describe('FechaZap - Monetização, Planos e Stripe Architecture (Fase 6/9)', ()
       // Agora o usuário pode criar orçamentos ilimitados e usar IA
       const aiRes = db.invokeFechaIa(user.id, { action: 'gerar_orcamento' });
       expect(aiRes.status).toBe(200);
+    });
+
+    it('produto ou preço desconhecido → NÃO deve conceder PRO e deve manter plano atual', () => {
+      const user = db.seedUser('user-unknown-plan', 'user@unknown.com', 'GRATUITO');
+
+      const unknownPayload = JSON.stringify({
+        id: 'evt_unknown_prod',
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            id: 'cs_unknown',
+            client_reference_id: user.id,
+            customer: 'cus_unknown',
+            subscription: 'sub_unknown',
+            metadata: { custom_item: 'random_gadget' }, // Sem plano TURBO ou PRO
+          },
+        },
+      });
+
+      const sig = signStripePayload(unknownPayload, webhookSecret);
+      const res = db.processStripeWebhook(unknownPayload, sig, webhookSecret);
+
+      expect(res.status).toBe(200);
+      expect(res.error).toContain('Plano não reconhecido');
+      // O plano do usuário continua estritamente GRATUITO (não concede PRO indevidamente)
+      expect(db.calculateEffectivePlan(user.id)).toBe('GRATUITO');
     });
 
     it('webhook com HMAC inválido → deve rejeitar imediatamente com 401', () => {

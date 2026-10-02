@@ -73,9 +73,13 @@ async function verifyStripeSignature(
 }
 
 /**
- * Mapeia identificador de produto/preço ou metadata do Stripe para o plano do FechaZap
+ * Mapeia identificador de produto/preço ou metadata do Stripe para o plano do FechaZap.
+ * POLÍTICA DE SEGURANÇA:
+ * - NUNCA retorna fallback silencioso para 'PRO'.
+ * - Se o produto/preço/metadata não indicar claramente 'TURBO' ou 'PRO', retorna null.
+ * - Evita concessão indevida de planos pagos para produtos desconhecidos.
  */
-function resolvePlanFromStripeObject(obj: any): 'PRO' | 'TURBO' | 'GRATUITO' {
+function resolvePlanFromStripeObject(obj: any): 'PRO' | 'TURBO' | null {
   // 1. Metadata explícita
   const metaPlan = obj?.metadata?.plano || obj?.metadata?.plan;
   if (metaPlan) {
@@ -85,19 +89,22 @@ function resolvePlanFromStripeObject(obj: any): 'PRO' | 'TURBO' | 'GRATUITO' {
   }
 
   // 2. Análise de line_items / plan name / price nickname
-  const planName = (
-    obj?.plan?.nickname ||
-    obj?.plan?.id ||
-    obj?.items?.data?.[0]?.price?.nickname ||
-    obj?.items?.data?.[0]?.price?.id ||
-    ''
-  ).toUpperCase();
+  const planCandidates = [
+    obj?.plan?.nickname,
+    obj?.plan?.id,
+    obj?.items?.data?.[0]?.price?.nickname,
+    obj?.items?.data?.[0]?.price?.id,
+    obj?.line_items?.data?.[0]?.description,
+    obj?.line_items?.data?.[0]?.price?.nickname,
+  ].filter(Boolean).map((s) => String(s).toUpperCase());
 
-  if (planName.includes('TURBO')) return 'TURBO';
-  if (planName.includes('PRO')) return 'PRO';
+  for (const name of planCandidates) {
+    if (name.includes('TURBO')) return 'TURBO';
+    if (name.includes('PRO')) return 'PRO';
+  }
 
-  // Fallback padrão para upgrade pago sem especificação: PRO
-  return 'PRO';
+  // Se nenhum indicador for encontrado, falha fechado retornando null (NUNCA assume PRO)
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -192,6 +199,20 @@ Deno.serve(async (req) => {
         const subscriptionId = obj.subscription;
         const targetPlan = resolvePlanFromStripeObject(obj);
 
+        if (!targetPlan) {
+          console.error(`[stripe-webhook] checkout.session.completed: Produto ou plano não reconhecido no Stripe session ${obj?.id}. Nenhum plano concedido.`);
+          await supabaseAdmin.from('stripe_events').insert({
+            id: eventId,
+            event_type: eventType,
+            payload: obj,
+            processed_at: new Date().toISOString(),
+          });
+          return new Response(
+            JSON.stringify({ received: true, warning: 'Plano não reconhecido. Nenhum plano concedido.' }),
+            { status: 200, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         if (userId) {
           // Registra ou atualiza a assinatura vinculada
           await supabaseAdmin.from('subscriptions').upsert(
@@ -231,6 +252,20 @@ Deno.serve(async (req) => {
         const customerId = obj.customer;
         const stripeStatus = obj.status; // 'active', 'trialing', 'past_due', 'canceled', etc.
         const targetPlan = resolvePlanFromStripeObject(obj);
+
+        if (!targetPlan) {
+          console.error(`[stripe-webhook] customer.subscription: Produto ou plano não reconhecido na assinatura ${subscriptionId}.`);
+          await supabaseAdmin.from('stripe_events').insert({
+            id: eventId,
+            event_type: eventType,
+            payload: obj,
+            processed_at: new Date().toISOString(),
+          });
+          return new Response(
+            JSON.stringify({ received: true, warning: 'Plano não reconhecido. Assinatura não alterada.' }),
+            { status: 200, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
 
         // Identifica o user_id (via metadata da subscription ou localizando no banco pelo customerId)
         let userId = obj.metadata?.user_id;

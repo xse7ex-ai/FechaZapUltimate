@@ -722,3 +722,11 @@ GRANT ALL ON public.stripe_events TO service_role;
 REVOKE UPDATE (plano) ON public.profiles FROM anon, authenticated;
 GRANT UPDATE (nome, empresa_nome, whatsapp) ON public.profiles TO authenticated;
 
+-- Menor privilégio em funções SECURITY DEFINER de monetização:
+-- Execução restrita a service_role (não acessíveis diretamente pelo frontend)
+REVOKE EXECUTE ON FUNCTION public.calculate_effective_user_plan(UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.calculate_effective_user_plan(UUID) TO service_role;
+
+REVOKE EXECUTE ON FUNCTION public.sync_profile_from_subscription() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.sync_profile_from_subscription() TO service_role;
+

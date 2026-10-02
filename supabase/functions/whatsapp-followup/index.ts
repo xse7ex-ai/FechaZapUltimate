@@ -36,7 +36,8 @@ Deno.serve(async (req) => {
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || '';
 
   // Credenciais centrais do servidor para envio via Meta Cloud API
-  const metaToken = Deno.env.get('WHATSAPP_TOKEN') || '';
+  const metaToken = Deno.env.get('WHATSAPP_TOKEN') || Deno.env.get('META_WHATSAPP_TOKEN') || '';
+  const centralServerPhoneId = Deno.env.get('PHONE_NUMBER_ID') || Deno.env.get('WHATSAPP_PHONE_NUMBER_ID') || '';
   const metaTemplateName = Deno.env.get('WHATSAPP_TEMPLATE_NAME') || 'fechazap_followup';
 
   try {
@@ -170,30 +171,85 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 5. Verificação Obrigatória da Conexão WhatsApp Ativa do Usuário (Multi-Tenant)
-    // Se o usuário TURBO não possuir uma conexão ativa, bloqueia com erro explícito ANTES de debitar quota
+    // =========================================================================
+    // 5. Verificação da Conexão WhatsApp (Modelo Híbrido: Individual > Central)
+    //
+    // MODO A (WhatsApp Individual do Usuário):
+    //   - Se o usuário possui conexão ativa em whatsapp_connections, utiliza a conexão individual.
+    //   - O phone_number_id e credencial associada pertencem exclusivamente ao usuário.
+    //   - Validação estrita: se phoneNumberId foi enviado pelo frontend, deve
+    //     pertencer à conexão ativa deste usuário. Jamais usar conexão de outro.
+    //
+    // MODO B (WhatsApp Central Compartilhado do FechaZap):
+    //   - Se o usuário NÃO possui conexão individual ativa:
+    //   - Recai controladamente para o WhatsApp central autorizado do FechaZap.
+    //   - Utiliza exclusivamente WHATSAPP_TOKEN e PHONE_NUMBER_ID do backend.
+    //   - Se phoneNumberId foi enviado pelo frontend, deve corresponder ao central.
+    //   - NUNCA expõe essas credenciais ao frontend nem no localStorage.
+    // =========================================================================
+    const requestedPhoneId = body?.phoneNumberId || body?.phone_number_id;
+
+    // PASSO 1: Verificar se existe whatsapp_connections ativa para o usuário autenticado
     const { data: userConn, error: connErr } = await supabaseAdmin
       .from('whatsapp_connections')
-      .select('phone_number_id, status')
+      .select('phone_number_id, status, user_id, access_token_encrypted')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .maybeSingle();
 
-    if (connErr || !userConn?.phone_number_id) {
-      const directUrl = buildDirectWhatsAppUrl(phoneClean, `Olá, ${orcamento.cliente_nome || 'Cliente'}.`);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Conexão do WhatsApp comercial não encontrada ou inativa para este usuário. Conecte seu número nas configurações para utilizar o disparo automático ou envie manualmente.',
-          code: 'WHATSAPP_CONNECTION_REQUIRED',
-          fallbackUrl: directUrl,
-        }),
-        { status: 400, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    let effectivePhoneId = '';
+    let effectiveToken = '';
+    let connectionMode: 'individual' | 'central' = 'central';
 
-    const effectivePhoneId = userConn.phone_number_id;
-    const effectiveToken = metaToken;
+    if (userConn?.phone_number_id) {
+      // MODO A: Conexão individual do usuário tem prioridade absoluta
+      if (requestedPhoneId && requestedPhoneId !== userConn.phone_number_id) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'O phone_number_id solicitado não pertence à conexão ativa do usuário autenticado.',
+            code: 'WHATSAPP_FORBIDDEN_PHONE_ID',
+          }),
+          { status: 403, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      effectivePhoneId = userConn.phone_number_id;
+      // Credencial individual (se houver credencial específica criptografada, senão token seguro do servidor)
+      effectiveToken = userConn.access_token_encrypted || metaToken;
+      connectionMode = 'individual';
+    } else {
+      // PASSO 2: Fallback controlado para WhatsApp Central Compartilhado Autorizado
+      const centralPhoneId = centralServerPhoneId || '106934522435791';
+      const centralToken = metaToken;
+
+      if (!centralPhoneId || !centralToken) {
+        const directUrl = buildDirectWhatsAppUrl(phoneClean, `Olá, ${orcamento.cliente_nome || 'Cliente'}.`);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Conexão do WhatsApp comercial não configurada no servidor e nenhuma conexão individual ativa.',
+            code: 'WHATSAPP_CONNECTION_REQUIRED',
+            fallbackUrl: directUrl,
+          }),
+          { status: 400, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (requestedPhoneId && requestedPhoneId !== centralPhoneId) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'O phone_number_id solicitado não é autorizado para este usuário.',
+            code: 'WHATSAPP_FORBIDDEN_PHONE_ID',
+          }),
+          { status: 403, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      effectivePhoneId = centralPhoneId;
+      effectiveToken = centralToken;
+      connectionMode = 'central';
+    }
 
     // 6. CONSUMO ATÔMICO DE QUOTA DE IA
     // Executado exclusivamente após validação completa de autorização, orçamento, opt-in e conexão WhatsApp ativa
@@ -392,7 +448,7 @@ Objetivo: Perguntar se restou alguma dúvida para fechar o serviço. Use negrito
           metaData?.error?.error_subcode === 463 ||
           metaData?.error?.error_subcode === 467;
 
-        if (isTokenRevoked) {
+        if (isTokenRevoked && connectionMode === 'individual') {
           console.warn(`[whatsapp-followup] Token Meta expirado ou revogado para o usuário ${user.id}`);
           await supabaseAdmin
             .from('whatsapp_connections')

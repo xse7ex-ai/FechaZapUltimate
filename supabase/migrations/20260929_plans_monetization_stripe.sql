@@ -137,3 +137,11 @@ GRANT ALL ON public.stripe_events TO service_role;
 -- Garante que NENHUM payload de update do frontend possa alterar a coluna 'plano'
 REVOKE UPDATE (plano) ON public.profiles FROM anon, authenticated;
 GRANT UPDATE (nome, empresa_nome, whatsapp) ON public.profiles TO authenticated;
+
+-- 7. Menor privilégio em funções SECURITY DEFINER de monetização
+-- calculate_effective_user_plan e sync_profile_from_subscription não devem ser expostas ao frontend
+REVOKE EXECUTE ON FUNCTION public.calculate_effective_user_plan(UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.calculate_effective_user_plan(UUID) TO service_role;
+
+REVOKE EXECUTE ON FUNCTION public.sync_profile_from_subscription() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.sync_profile_from_subscription() TO service_role;

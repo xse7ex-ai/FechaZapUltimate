@@ -51,6 +51,8 @@ interface MockClient {
   whatsappOptIn: boolean;
   whatsappOptOutAt?: string | null;
   lastInboundAt?: string;
+  updatedAt?: string;
+  createdAt?: string;
 }
 
 class MockWhatsAppWebhookService {
@@ -58,9 +60,16 @@ class MockWhatsAppWebhookService {
   private messages: MockMessage[] = [];
   private clients: MockClient[] = [];
   private appSecret: string;
+  private centralPhoneNumberId: string | null = null;
+  public lastRoutingStatus?: 'RESOLVED' | 'NOT_FOUND' | 'AMBIGUOUS';
 
-  constructor(appSecret: string) {
+  constructor(appSecret: string, centralPhoneNumberId: string | null = null) {
     this.appSecret = appSecret;
+    this.centralPhoneNumberId = centralPhoneNumberId;
+  }
+
+  setCentralPhoneNumberId(id: string | null) {
+    this.centralPhoneNumberId = id;
   }
 
   addConnection(conn: MockConnection) {
@@ -109,13 +118,97 @@ class MockWhatsAppWebhookService {
           continue;
         }
 
-        // 3. Tenant matching estrito por phone_number_id com status = 'active'
+        // 3. Roteamento Híbrido:
+        // Prioridade MODO A: Conexão individual ativa
         const conn = this.connections.find(
           (c) => c.phoneNumberId === phoneNumberId && c.status === 'active'
         );
 
-        if (!conn) {
-          // Inativo, revogado ou inexistente -> descartar
+        let ownerUserId: string | null = null;
+
+        if (conn) {
+          ownerUserId = conn.userId;
+        } else if (this.centralPhoneNumberId && phoneNumberId === this.centralPhoneNumberId) {
+          // MODO B: Número central compartilhado do FechaZap
+          const messages = value.messages || [];
+          const candidateFrom = messages[0]?.from;
+          if (!candidateFrom) continue;
+
+          // Normalização completa: DDI+DDD+número
+          const cleanPhoneHelper = (p: string) => {
+            let digits = (p || '').replace(/\D/g, '');
+            if (!digits.startsWith('55') && (digits.length === 10 || digits.length === 11)) {
+              digits = `55${digits}`;
+            }
+            return digits;
+          };
+
+          const normalizedCandidateFrom = cleanPhoneHelper(candidateFrom);
+
+          // Candidatos: Usuários que possuem cliente com telefone totalmente normalizado idêntico
+          const matchingClients = this.clients.filter(
+            (c) => cleanPhoneHelper(c.telefone) === normalizedCandidateFrom
+          );
+
+          const candidateUserIds = Array.from(new Set(matchingClients.map((c) => c.userId)));
+          const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
+          const now = Date.now();
+
+          // Filtro de inatividade: descarta apenas quem não tem interação há mais de 12 meses
+          const activeCandidates = candidateUserIds.filter((uid) => {
+            const client = matchingClients.find((c) => c.userId === uid);
+            const clientTime = client?.lastInboundAt
+              ? new Date(client.lastInboundAt).getTime()
+              : (client?.updatedAt
+                ? new Date(client.updatedAt).getTime()
+                : (client?.createdAt ? new Date(client.createdAt).getTime() : now));
+            return (now - clientTime) <= TWELVE_MONTHS_MS;
+          });
+
+          if (activeCandidates.length === 0) {
+            this.lastRoutingStatus = 'NOT_FOUND';
+            console.log(JSON.stringify({
+              event: 'whatsapp_central_routing',
+              routing_status: 'NOT_FOUND',
+              phone_number_id: phoneNumberId,
+              timestamp: new Date().toISOString(),
+              candidate_count: candidateUserIds.length,
+              active_candidate_count: 0,
+            }));
+            continue;
+          }
+
+          if (activeCandidates.length === 1) {
+            this.lastRoutingStatus = 'RESOLVED';
+            ownerUserId = activeCandidates[0];
+            console.log(JSON.stringify({
+              event: 'whatsapp_central_routing',
+              routing_status: 'RESOLVED',
+              phone_number_id: phoneNumberId,
+              timestamp: new Date().toISOString(),
+              candidate_count: candidateUserIds.length,
+              active_candidate_count: 1,
+            }));
+          } else {
+            // Múltiplos candidatos ativos: OBRIGATORIAMENTE AMBIGUOUS,
+            // independentemente de qual tenha o registro mais recente.
+            this.lastRoutingStatus = 'AMBIGUOUS';
+            console.log(JSON.stringify({
+              event: 'whatsapp_central_routing',
+              routing_status: 'AMBIGUOUS',
+              phone_number_id: phoneNumberId,
+              timestamp: new Date().toISOString(),
+              candidate_count: candidateUserIds.length,
+              active_candidate_count: activeCandidates.length,
+            }));
+            continue;
+          }
+        } else {
+          // Inativo, revogado, inexistente ou canal desconhecido -> descartar
+          continue;
+        }
+
+        if (!ownerUserId) {
           continue;
         }
 
@@ -137,7 +230,7 @@ class MockWhatsAppWebhookService {
           const optInKeywords = ['START', 'COMEÇAR', 'COMECAR', 'VOLTAR', 'SIM'];
 
           const client = this.clients.find(
-            (c) => c.userId === conn.userId && c.telefone === fromRaw
+            (c) => c.userId === ownerUserId && c.telefone === fromRaw
           );
 
           if (client) {
@@ -154,7 +247,7 @@ class MockWhatsAppWebhookService {
           // Gravação isolada com user_id do tenant
           this.messages.push({
             id: `msg-${Date.now()}-${Math.random()}`,
-            userId: conn.userId,
+            userId: ownerUserId,
             phoneNumberId,
             clienteTelefone: fromRaw,
             corpo: corpoTexto,
@@ -172,12 +265,21 @@ class MockWhatsAppWebhookService {
 }
 
 /**
- * Simulação do Serviço de Follow-up Outbound
+ * Simulação do Serviço de Follow-up Outbound (Modelo Híbrido)
  */
 class MockWhatsAppFollowupService {
   private connections: MockConnection[] = [];
   private clients: MockClient[] = [];
   private aiQuotaUsed: number = 0;
+  private centralPhoneNumberId: string | null = null;
+
+  constructor(centralPhoneNumberId: string | null = null) {
+    this.centralPhoneNumberId = centralPhoneNumberId;
+  }
+
+  setCentralPhoneNumberId(id: string | null) {
+    this.centralPhoneNumberId = id;
+  }
 
   addConnection(conn: MockConnection) {
     this.connections.push(conn);
@@ -195,8 +297,9 @@ class MockWhatsAppFollowupService {
     userId: string;
     clienteTelefone: string;
     orcamentoId: string;
-  }): Promise<{ success: boolean; code?: string; error?: string; fallbackUrl?: string }> {
-    const { userId, clienteTelefone } = params;
+    phoneNumberId?: string;
+  }): Promise<{ success: boolean; mode?: 'individual' | 'central'; effectivePhoneId?: string; code?: string; error?: string; fallbackUrl?: string }> {
+    const { userId, clienteTelefone, phoneNumberId } = params;
 
     // 1. Verificação de opt-out do cliente
     const client = this.clients.find((c) => c.userId === userId && c.telefone === clienteTelefone);
@@ -209,19 +312,44 @@ class MockWhatsAppFollowupService {
       };
     }
 
-    // 2. Verificação OBRIGATÓRIA de conexão WhatsApp ativa do tenant (Regra 10)
+    // 2. Modelo Híbrido: Individual com prioridade > Central compartilhado
     const activeConn = this.connections.find(
       (c) => c.userId === userId && c.status === 'active'
     );
 
-    if (!activeConn) {
-      // Bloqueia com erro apropriado ANTES de debitar quota
-      return {
-        success: false,
-        code: 'WHATSAPP_CONNECTION_REQUIRED',
-        error: 'Conexão do WhatsApp comercial não encontrada ou inativa para este usuário.',
-        fallbackUrl: `https://wa.me/${clienteTelefone}?text=Orcamento`,
-      };
+    let effectivePhoneId = '';
+    let mode: 'individual' | 'central' = 'central';
+
+    if (activeConn) {
+      // MODO A: Conexão individual do usuário tem prioridade
+      if (phoneNumberId && phoneNumberId !== activeConn.phoneNumberId) {
+        return {
+          success: false,
+          code: 'WHATSAPP_FORBIDDEN_PHONE_ID',
+          error: 'O phone_number_id solicitado não pertence à conexão ativa do usuário autenticado.',
+        };
+      }
+      effectivePhoneId = activeConn.phoneNumberId;
+      mode = 'individual';
+    } else {
+      // MODO B: Fallback para WhatsApp Central Compartilhado
+      if (!this.centralPhoneNumberId) {
+        return {
+          success: false,
+          code: 'WHATSAPP_CONNECTION_REQUIRED',
+          error: 'Conexão do WhatsApp comercial não encontrada ou inativa para este usuário.',
+          fallbackUrl: `https://wa.me/${clienteTelefone}?text=Orcamento`,
+        };
+      }
+      if (phoneNumberId && phoneNumberId !== this.centralPhoneNumberId) {
+        return {
+          success: false,
+          code: 'WHATSAPP_FORBIDDEN_PHONE_ID',
+          error: 'O phone_number_id solicitado não é autorizado.',
+        };
+      }
+      effectivePhoneId = this.centralPhoneNumberId;
+      mode = 'central';
     }
 
     // 3. Debita quota apenas após validações
@@ -229,6 +357,8 @@ class MockWhatsAppFollowupService {
 
     return {
       success: true,
+      mode,
+      effectivePhoneId,
     };
   }
 }
@@ -553,5 +683,356 @@ describe('WhatsApp Cloud API Multi-Tenant - Validações da Fase 5/9', () => {
     const client = webhookService.getClient(tenantId, clientPhone);
     expect(client?.whatsappOptIn).toBe(false);
     expect(client?.whatsappOptOutAt).toBeTruthy();
+  });
+
+  // ============================================================================
+  // SUÍTE ADICIONAL: MODELO HÍBRIDO (INDIVIDUAL > CENTRAL) & FALHA SEGURA
+  // ============================================================================
+  describe('Modelo Híbrido (Individual vs Central) & Segurança de Ambiguidade', () => {
+    const CENTRAL_ID = 'central_fechazap_shared_106934522435791';
+
+    it('7. Outbound: usuário com conexão individual ativa DEVE priorizar sua conexão individual', async () => {
+      const service = new MockWhatsAppFollowupService(CENTRAL_ID);
+      service.addConnection({
+        id: 'conn-indiv-1',
+        userId: 'user-individual',
+        phoneNumberId: 'phone-individual-99',
+        status: 'active',
+      });
+
+      const res = await service.triggerFollowup({
+        userId: 'user-individual',
+        clienteTelefone: '5511999990001',
+        orcamentoId: 'orc-indiv-1',
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.mode).toBe('individual');
+      expect(res.effectivePhoneId).toBe('phone-individual-99');
+    });
+
+    it('8. Outbound: usuário SEM conexão individual ativa DEVE usar o WhatsApp central autorizado', async () => {
+      const service = new MockWhatsAppFollowupService(CENTRAL_ID);
+
+      const res = await service.triggerFollowup({
+        userId: 'user-sem-conexao-propria',
+        clienteTelefone: '5511999990002',
+        orcamentoId: 'orc-central-1',
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.mode).toBe('central');
+      expect(res.effectivePhoneId).toBe(CENTRAL_ID);
+    });
+
+    it('9. Outbound: envio com phone_number_id forjado ou pertencente a outro canal deve ser bloqueado com 403', async () => {
+      const service = new MockWhatsAppFollowupService(CENTRAL_ID);
+      service.addConnection({
+        id: 'conn-indiv-2',
+        userId: 'user-legitimo',
+        phoneNumberId: 'phone-legitimo-11',
+        status: 'active',
+      });
+
+      // Usuário tentando forçar um phone_number_id diferente de sua conexão ativa
+      const res = await service.triggerFollowup({
+        userId: 'user-legitimo',
+        clienteTelefone: '5511999990003',
+        orcamentoId: 'orc-forged-1',
+        phoneNumberId: 'phone-de-outro-usuario-999',
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.code).toBe('WHATSAPP_FORBIDDEN_PHONE_ID');
+    });
+
+    it('10. Inbound: mensagem no número central compartilhado é entregue ao prestador único que atende o cliente', async () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      const userUnico = 'user-prestador-pedro';
+      const clienteFone = '5511955554444';
+
+      webService.addClient({
+        id: 'cli-pedro-1',
+        userId: userUnico,
+        telefone: clienteFone,
+        whatsappOptIn: true,
+      });
+
+      const payload = {
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            changes: [
+              {
+                field: 'messages',
+                value: {
+                  metadata: { phone_number_id: CENTRAL_ID },
+                  messages: [
+                    {
+                      id: 'wamid_central_1',
+                      from: clienteFone,
+                      type: 'text',
+                      text: { body: 'Aprovado o orçamento!' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const raw = JSON.stringify(payload);
+      const sig = `sha256=${createHmac('sha256', SECRET).update(raw).digest('hex')}`;
+      const res = await webService.processWebhook(raw, sig);
+
+      expect(res.status).toBe(200);
+      expect(res.processed).toBe(1);
+      const msgs = webService.getMessagesForUser(userUnico);
+      expect(msgs.length).toBe(1);
+      expect(msgs[0].corpo).toBe('Aprovado o orçamento!');
+    });
+
+    it('11. Inbound: ambiguidade no número compartilhado (múltiplos prestadores com mesmo cliente e sem remetente recente) resulta em falha segura', async () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      const user1 = 'user-prestador-1';
+      const user2 = 'user-prestador-2';
+      const clienteCompartilhado = '5511988880000';
+
+      // Ambos os prestadores têm o mesmo cliente cadastrado
+      webService.addClient({ id: 'c1', userId: user1, telefone: clienteCompartilhado, whatsappOptIn: true });
+      webService.addClient({ id: 'c2', userId: user2, telefone: clienteCompartilhado, whatsappOptIn: true });
+
+      const payload = {
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            changes: [
+              {
+                field: 'messages',
+                value: {
+                  metadata: { phone_number_id: CENTRAL_ID },
+                  messages: [
+                    {
+                      id: 'wamid_ambiguo_1',
+                      from: clienteCompartilhado,
+                      type: 'text',
+                      text: { body: 'Oi, tenho interesse' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const raw = JSON.stringify(payload);
+      const sig = `sha256=${createHmac('sha256', SECRET).update(raw).digest('hex')}`;
+      const res = await webService.processWebhook(raw, sig);
+
+      expect(res.status).toBe(200);
+      expect(res.processed).toBe(0); // Falha fechada: mensagem NÃO é processada para evitar atribuição incorreta
+      expect(webService.getMessagesForUser(user1).length).toBe(0);
+      expect(webService.getMessagesForUser(user2).length).toBe(0);
+    });
+
+    it('12. Inbound: mensagem para canal desconhecido (nem individual nem central) é descartada com segurança', async () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      const payload = {
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            changes: [
+              {
+                field: 'messages',
+                value: {
+                  metadata: { phone_number_id: 'phone_desconhecido_total_999' },
+                  messages: [
+                    {
+                      id: 'wamid_desconhecido',
+                      from: '5511999991234',
+                      type: 'text',
+                      text: { body: 'Tentativa em canal desconhecido' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const raw = JSON.stringify(payload);
+      const sig = `sha256=${createHmac('sha256', SECRET).update(raw).digest('hex')}`;
+      const res = await webService.processWebhook(raw, sig);
+
+      expect(res.status).toBe(200);
+      expect(res.processed).toBe(0);
+    });
+
+    it('13. Inbound: candidato exige telefone totalmente normalizado (DDI+DDD+número) e não apenas últimos dígitos', async () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      const userSp = 'user-sp';
+      // Cadastra cliente com DDD 21 (Rio de Janeiro)
+      webService.addClient({ id: 'c-rj', userId: userSp, telefone: '5521999998888', whatsappOptIn: true });
+
+      // Mensagem recebida de um telefone com DDD 11 (São Paulo) com os mesmos últimos dígitos
+      const payload = {
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            changes: [
+              {
+                field: 'messages',
+                value: {
+                  metadata: { phone_number_id: CENTRAL_ID },
+                  messages: [
+                    {
+                      id: 'wamid_diff_ddd',
+                      from: '5511999998888',
+                      type: 'text',
+                      text: { body: 'Olá SP' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const raw = JSON.stringify(payload);
+      const sig = `sha256=${createHmac('sha256', SECRET).update(raw).digest('hex')}`;
+      const res = await webService.processWebhook(raw, sig);
+
+      expect(res.status).toBe(200);
+      expect(res.processed).toBe(0); // Não deve fazer match de DDD 21 com DDD 11!
+      expect(webService.lastRoutingStatus).toBe('NOT_FOUND');
+    });
+
+    it('14. Inbound: candidato inativo há mais de 12 meses é descartado, resolvendo o candidato ativo remanescente', async () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      const userAtivo = 'user-ativo';
+      const userInativo = 'user-inativo';
+      const targetPhone = '5511977770000';
+
+      const catorzeMesesAtras = new Date(Date.now() - 14 * 30 * 24 * 60 * 60 * 1000).toISOString();
+      const umMesAtras = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      // Candidato 1 inativo (> 12 meses)
+      webService.addClient({
+        id: 'c-old',
+        userId: userInativo,
+        telefone: targetPhone,
+        whatsappOptIn: true,
+        lastInboundAt: catorzeMesesAtras,
+      });
+
+      // Candidato 2 ativo (< 12 meses)
+      webService.addClient({
+        id: 'c-new',
+        userId: userAtivo,
+        telefone: targetPhone,
+        whatsappOptIn: true,
+        lastInboundAt: umMesAtras,
+      });
+
+      const payload = {
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            changes: [
+              {
+                field: 'messages',
+                value: {
+                  metadata: { phone_number_id: CENTRAL_ID },
+                  messages: [
+                    {
+                      id: 'wamid_inactivity_filter',
+                      from: targetPhone,
+                      type: 'text',
+                      text: { body: 'Mensagem para prestador' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const raw = JSON.stringify(payload);
+      const sig = `sha256=${createHmac('sha256', SECRET).update(raw).digest('hex')}`;
+      const res = await webService.processWebhook(raw, sig);
+
+      expect(res.status).toBe(200);
+      expect(res.processed).toBe(1);
+      expect(webService.lastRoutingStatus).toBe('RESOLVED');
+      expect(webService.getMessagesForUser(userAtivo).length).toBe(1);
+      expect(webService.getMessagesForUser(userInativo).length).toBe(0);
+    });
+
+    it('15. Inbound: recência NÃO desempata dois candidatos ativos (resultado é obrigatoriamente AMBIGUOUS)', async () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      const userRecent = 'user-ontem';
+      const userOlder = 'user-dois-meses';
+      const targetPhone = '5511966660000';
+
+      const doisDiasAtras = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+      const doisMesesAtras = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+
+      // Candidato A interagiu há 2 dias (ativo)
+      webService.addClient({
+        id: 'c-a',
+        userId: userRecent,
+        telefone: targetPhone,
+        whatsappOptIn: true,
+        lastInboundAt: doisDiasAtras,
+      });
+
+      // Candidato B interagiu há 2 meses (também ativo, <= 12 meses)
+      webService.addClient({
+        id: 'c-b',
+        userId: userOlder,
+        telefone: targetPhone,
+        whatsappOptIn: true,
+        lastInboundAt: doisMesesAtras,
+      });
+
+      const payload = {
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            changes: [
+              {
+                field: 'messages',
+                value: {
+                  metadata: { phone_number_id: CENTRAL_ID },
+                  messages: [
+                    {
+                      id: 'wamid_two_active',
+                      from: targetPhone,
+                      type: 'text',
+                      text: { body: 'Dúvida geral' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const raw = JSON.stringify(payload);
+      const sig = `sha256=${createHmac('sha256', SECRET).update(raw).digest('hex')}`;
+      const res = await webService.processWebhook(raw, sig);
+
+      expect(res.status).toBe(200);
+      expect(res.processed).toBe(0); // NUNCA deve atribuir a A só porque A é mais recente!
+      expect(webService.lastRoutingStatus).toBe('AMBIGUOUS');
+      expect(webService.getMessagesForUser(userRecent).length).toBe(0);
+      expect(webService.getMessagesForUser(userOlder).length).toBe(0);
+    });
   });
 });

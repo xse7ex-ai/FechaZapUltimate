@@ -165,35 +165,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Validação do Perfil e Plano TURBO
-    const { data: profile, error: profileErr } = await supabaseAdmin
-      .from('profiles')
-      .select('id, email, nome, plano')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (profileErr || !profile) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Perfil de usuário não encontrado.' }),
-        { status: 404, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const userPlano = (profile.plano || 'GRATUITO').toUpperCase();
-    if (userPlano !== 'TURBO') {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'A Inteligência Artificial é exclusiva para assinantes do plano TURBO.',
-          code: 'PLAN_TURBO_REQUIRED',
-          planoAtual: userPlano,
-          planoNecessario: 'TURBO',
-        }),
-        { status: 403, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 4. Verificação Segura da Configuração do GEMINI_API_KEY
+    // 3. Verificação Segura da Configuração do GEMINI_API_KEY no Servidor
     if (!geminiApiKey) {
       return new Response(
         JSON.stringify({
@@ -205,7 +177,12 @@ Deno.serve(async (req) => {
     }
 
     // =========================================================================
-    // AÇÃO ESPECIAL: Teste de Conexão com Google Gemini (NÃO consome quota de usuário)
+    // AÇÃO ESPECIAL: Teste de Conexão com Google Gemini (Disponibilidade do Backend)
+    // - Autenticação obrigatória (usuário logado com JWT válido)
+    // - NÃO expõe GEMINI_API_KEY ao frontend
+    // - NÃO consome quota de IA do usuário
+    // - NÃO permite uso anônimo (401 já validado acima)
+    // - Apenas verifica se o backend consegue comunicar com a API oficial do Gemini
     // =========================================================================
     if (action === 'test_connection') {
       try {
@@ -238,6 +215,34 @@ Deno.serve(async (req) => {
           { status: 502, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+    }
+
+    // 4. Validação do Perfil e Plano TURBO (Obrigatório para geração de orçamentos e IA)
+    const { data: profile, error: profileErr } = await supabaseAdmin
+      .from('profiles')
+      .select('id, email, nome, plano')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profileErr || !profile) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Perfil de usuário não encontrado.' }),
+        { status: 404, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userPlano = (profile.plano || 'GRATUITO').toUpperCase();
+    if (userPlano !== 'TURBO') {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'A Inteligência Artificial é exclusiva para assinantes do plano TURBO.',
+          code: 'PLAN_TURBO_REQUIRED',
+          planoAtual: userPlano,
+          planoNecessario: 'TURBO',
+        }),
+        { status: 403, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // 4. VALIDAÇÃO PRÉVIA DOS PARÂMETROS DE ENTRADA (SEM CONSUMIR QUOTA SE INVÁLIDO)

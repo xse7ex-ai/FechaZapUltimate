@@ -59,6 +59,156 @@ async function verifyMetaHmac(
   }
 }
 
+export interface CentralWhatsappResolutionResult {
+  status: 'RESOLVED' | 'NOT_FOUND' | 'AMBIGUOUS';
+  userId: string | null;
+  candidateCount: number;
+  activeCandidateCount: number;
+}
+
+/**
+ * Resolução Segura de Proprietário no WhatsApp Central Compartilhado
+ *
+ * Regras:
+ * 1. Candidato: Usuário que possui cliente ou orçamento com o telefone totalmente
+ *    normalizado (DDI+DDD+número completo) idêntico ao da mensagem recebida.
+ * 2. Recência e Última Interação: Utilizadas estritamente para descartar candidatos inativos
+ *    (sem nenhuma interação há mais de 12 meses). Se restarem 2 ou mais candidatos ativos,
+ *    o resultado é OBRIGATORIAMENTE AMBIGUOUS, independentemente de qual tenha o registro mais recente.
+ * 3. Log estruturado obrigatório dos status (AMBIGUOUS, NOT_FOUND, RESOLVED) com phone_number_id,
+ *    timestamp e contadores de candidatos, sem dados pessoais além do estritamente necessário.
+ */
+export async function resolveCentralWhatsappOwner(
+  supabaseAdmin: any,
+  cleanFrom: string,
+  phoneNumberId: string
+): Promise<CentralWhatsappResolutionResult> {
+  const normalizedTarget = cleanPhoneNumber(cleanFrom);
+  const localDigits = normalizedTarget.startsWith('55')
+    ? normalizedTarget.slice(2)
+    : normalizedTarget;
+
+  // Busca orçamentos e clientes no banco e valida correspondência completa no backend
+  const { data: orcamentos } = await supabaseAdmin
+    .from('orcamentos')
+    .select('id, user_id, cliente_telefone, created_at, updated_at')
+    .ilike('cliente_telefone', `%${localDigits}%`);
+
+  const { data: clientes } = await supabaseAdmin
+    .from('clientes')
+    .select('id, user_id, telefone, last_inbound_at, created_at, updated_at')
+    .ilike('telefone', `%${localDigits}%`);
+
+  const { data: mensagens } = await supabaseAdmin
+    .from('mensagens_whatsapp')
+    .select('user_id, created_at')
+    .ilike('cliente_telefone', `%${localDigits}%`);
+
+  const candidatesMap = new Map<string, number>();
+
+  const updateCandidateTime = (userId: string, dateStr?: string | null) => {
+    if (!userId) return;
+    const time = dateStr ? new Date(dateStr).getTime() : 0;
+    const current = candidatesMap.get(userId) || 0;
+    if (time > current) {
+      candidatesMap.set(userId, time);
+    } else if (!candidatesMap.has(userId)) {
+      candidatesMap.set(userId, time);
+    }
+  };
+
+  // Avalia orçamentos (exige equivalência completa do telefone totalmente normalizado)
+  for (const orc of orcamentos || []) {
+    if (orc.user_id && cleanPhoneNumber(orc.cliente_telefone) === normalizedTarget) {
+      updateCandidateTime(orc.user_id, orc.updated_at || orc.created_at);
+    }
+  }
+
+  // Avalia clientes (exige equivalência completa do telefone totalmente normalizado)
+  for (const cli of clientes || []) {
+    if (cli.user_id && cleanPhoneNumber(cli.telefone) === normalizedTarget) {
+      updateCandidateTime(cli.user_id, cli.last_inbound_at || cli.updated_at || cli.created_at);
+    }
+  }
+
+  // Avalia mensagens de candidatos já identificados
+  for (const msg of mensagens || []) {
+    if (msg.user_id && candidatesMap.has(msg.user_id)) {
+      updateCandidateTime(msg.user_id, msg.created_at);
+    }
+  }
+
+  const allCandidates = Array.from(candidatesMap.entries());
+  const candidateCount = allCandidates.length;
+
+  if (candidateCount === 0) {
+    const result: CentralWhatsappResolutionResult = {
+      status: 'NOT_FOUND',
+      userId: null,
+      candidateCount: 0,
+      activeCandidateCount: 0,
+    };
+    console.log(JSON.stringify({
+      event: 'whatsapp_central_routing',
+      routing_status: result.status,
+      phone_number_id: phoneNumberId,
+      timestamp: new Date().toISOString(),
+      candidate_count: 0,
+      active_candidate_count: 0,
+    }));
+    return result;
+  }
+
+  // Filtro de inatividade: descarta apenas quem não tem interação há mais de 12 meses
+  const TWELVE_MONTHS_MS = 365 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+
+  const activeCandidates = allCandidates.filter(([_, maxTime]) => {
+    if (!maxTime || maxTime === 0) return true; // Se não houver data, mantém como ativo preventivamente
+    return (now - maxTime) <= TWELVE_MONTHS_MS;
+  });
+
+  const activeCandidateCount = activeCandidates.length;
+  let result: CentralWhatsappResolutionResult;
+
+  if (activeCandidateCount === 0) {
+    result = {
+      status: 'NOT_FOUND',
+      userId: null,
+      candidateCount,
+      activeCandidateCount: 0,
+    };
+  } else if (activeCandidateCount === 1) {
+    result = {
+      status: 'RESOLVED',
+      userId: activeCandidates[0][0],
+      candidateCount,
+      activeCandidateCount: 1,
+    };
+  } else {
+    // 2 ou mais candidatos ativos: OBRIGATORIAMENTE AMBIGUOUS,
+    // independentemente de qual tenha o registro mais recente.
+    result = {
+      status: 'AMBIGUOUS',
+      userId: null,
+      candidateCount,
+      activeCandidateCount,
+    };
+  }
+
+  // Log estruturado obrigatório dos status de roteamento
+  console.log(JSON.stringify({
+    event: 'whatsapp_central_routing',
+    routing_status: result.status,
+    phone_number_id: phoneNumberId,
+    timestamp: new Date().toISOString(),
+    candidate_count: result.candidateCount,
+    active_candidate_count: result.activeCandidateCount,
+  }));
+
+  return result;
+}
+
 // Palavras-chave normatizadas para cancelamento proativo (Opt-out) e reativação (Opt-in)
 const OPT_OUT_KEYWORDS = [
   'STOP',
@@ -131,6 +281,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const appSecret = Deno.env.get('WHATSAPP_APP_SECRET') || '';
+    const centralPhoneId = Deno.env.get('PHONE_NUMBER_ID') || Deno.env.get('WHATSAPP_PHONE_NUMBER_ID') || '106934522435791';
 
     // SEGURANÇA CRÍTICA: Se o segredo do app não estiver configurado, falha fechado imediatamente
     if (!appSecret) {
@@ -240,13 +391,17 @@ Deno.serve(async (req) => {
             const cleanFrom = cleanPhoneNumber(fromRaw);
 
             // =========================================================================
-            // ROTEAMENTO MULTI-TENANT SEGURO (Baseado estritamente em phone_number_id)
+            // ROTEAMENTO MULTI-TENANT HÍBRIDO SEGURO
+            // Prioridade:
+            //   1. MODO A: Conexão Individual Ativa (whatsapp_connections)
+            //   2. MODO B: WhatsApp Central Compartilhado do FechaZap (centralPhoneId)
             // =========================================================================
             if (!phoneNumberId) {
               console.warn('[whatsapp-webhook] Mensagem descartada: metadata.phone_number_id ausente.');
               continue;
             }
 
+            // PASSO 1: Verificar se este phone_number_id pertence a uma conexão individual ativa
             const { data: conn } = await supabaseAdmin
               .from('whatsapp_connections')
               .select('user_id, status')
@@ -254,31 +409,51 @@ Deno.serve(async (req) => {
               .eq('status', 'active')
               .maybeSingle();
 
-            const ownerUserId = conn?.user_id || null;
+            let ownerUserId: string | null = null;
 
-            // Se não existir conexão ativa correspondente em whatsapp_connections:
-            // NÃO inserir mensagem, NÃO procurar dono pelo telefone, NÃO escolher usuário TURBO, NÃO usar fallback central.
+            if (conn?.user_id) {
+              // MODO A: Conexão individual do prestador tem prioridade total
+              ownerUserId = conn.user_id;
+            } else {
+              // PASSO 2: Verificar se é o número central compartilhado do FechaZap
+              if (phoneNumberId !== centralPhoneId) {
+                console.warn(
+                  `[whatsapp-webhook] Nenhuma conexão ativa encontrada para phone_number_id="${phoneNumberId}" e número não é o central. Mensagem descartada por segurança.`
+                );
+                continue;
+              }
+
+              // MODO B: Resolução Segura de Proprietário no WhatsApp Central Compartilhado
+              const resolution = await resolveCentralWhatsappOwner(supabaseAdmin, cleanFrom, phoneNumberId);
+
+              if (resolution.status !== 'RESOLVED' || !resolution.userId) {
+                // NOT_FOUND ou AMBIGUOUS: log estruturado já emitido; descarta de forma segura
+                continue;
+              }
+
+              ownerUserId = resolution.userId;
+            }
+
             if (!ownerUserId) {
               console.warn(
-                `[whatsapp-webhook] Nenhuma conexão ativa encontrada para phone_number_id="${phoneNumberId}". Mensagem descartada por segurança.`
+                `[whatsapp-webhook] Proprietário não identificado para a mensagem ${waMessageId}. Descartada por segurança.`
               );
               continue;
             }
 
             // Busca orçamento e cliente vinculados exclusivamente para o ownerUserId autenticado
-            const digitsOnly = cleanFrom.replace(/\D/g, '');
-            const lastDigits = digitsOnly.length >= 8 ? digitsOnly.slice(-8) : digitsOnly;
+            const localDigits = cleanFrom.startsWith('55') ? cleanFrom.slice(2) : cleanFrom;
 
             let ownerClienteNome: string | null = null;
             let ownerOrcamentoId: string | null = null;
             let matchedClienteId: string | null = null;
 
-            // Busca orçamentos deste prestador específico
+            // Busca orçamentos deste prestador específico com correspondência normalizada
             const { data: orcMatch } = await supabaseAdmin
               .from('orcamentos')
-              .select('id, cliente_nome, cliente_id')
+              .select('id, cliente_nome, cliente_id, cliente_telefone')
               .eq('user_id', ownerUserId)
-              .ilike('cliente_telefone', `%${lastDigits}%`)
+              .ilike('cliente_telefone', `%${localDigits}%`)
               .order('created_at', { ascending: false })
               .limit(1)
               .maybeSingle();
@@ -293,9 +468,9 @@ Deno.serve(async (req) => {
             if (!matchedClienteId) {
               const { data: cliMatch } = await supabaseAdmin
                 .from('clientes')
-                .select('id, nome')
+                .select('id, nome, telefone')
                 .eq('user_id', ownerUserId)
-                .ilike('telefone', `%${lastDigits}%`)
+                .ilike('telefone', `%${localDigits}%`)
                 .limit(1)
                 .maybeSingle();
 

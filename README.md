@@ -72,21 +72,22 @@ Configurados via `supabase secrets set`:
 
 O banco é protegido por **Row Level Security (RLS)** em todas as tabelas. Nenhuma linha é visível ou mutável fora do `user_id` autenticado.
 
-### Arquivos de Migração (`supabase/migrations/`)
-1. `schema.sql`: Estrutura inicial das tabelas `profiles`, `empresa_config`, `clientes`, `orcamentos`, `mensagens_whatsapp` com RLS ativado.
-2. `20260928_enforce_orcamento_quota.sql`: Triggers e stored procedure `can_create_orcamento(user_uuid)` que impõe limite de 5 orçamentos mensais no plano GRATUITO.
-3. `20260928_whatsapp_multitenant_optin.sql`: Estrutura para webhooks WhatsApp, deduplicação de mensagens e controle de opt-in/opt-out (`STOP`, `PARAR`).
-4. `20260929_plans_monetization_stripe.sql`:
-   - Revogação de permissão `UPDATE (plano)` para `authenticated` e `anon`.
-   - Trigger `protect_profile_plan_update()` (Anti-Tampering definitivo).
-   - Tabela `subscription_history` e RPC de débito de IA `check_and_consume_ia_quota`.
+### Fonte de Verdade da Modelagem
+- **`supabase/schema.sql`**: **Snapshot Consolidado e Fonte de Verdade** do estado atual do banco de dados (tabelas, triggers, restrições, funções SECURITY DEFINER de menor privilégio e políticas RLS).
+- **`supabase/migrations/`**: Histórico incremental de migrações cronológicas aplicadas:
+  1. `20260928_enforce_orcamento_quota.sql`: Triggers e enforcement de limite de 5 orçamentos mensais no plano GRATUITO.
+  2. `20260928_whatsapp_multitenant_optin.sql`: Estrutura multi-tenant de WhatsApp, deduplicação de mensagens e controle de opt-in/opt-out (`STOP`, `PARAR`).
+  3. `20260929_plans_monetization_stripe.sql`:
+     - Revogação de permissão `UPDATE (plano)` para `authenticated` e `anon`.
+     - Trigger `protect_profile_plan_update()` (Anti-Tampering).
+     - Menor privilégio em `calculate_effective_user_plan` e `sync_profile_from_subscription` restritos a `service_role`.
 
 ### Aplicando as Migrations
 ```bash
 # Vincular projeto Supabase
 supabase link --project-ref seu-project-ref
 
-# Aplicar migrações
+# Aplicar migrações incrementais
 supabase db push
 ```
 
@@ -97,24 +98,34 @@ supabase db push
 Localizadas em `supabase/functions/`:
 
 1. **`fecha-ia`**:
-   - Gera propostas comerciais e orçamentos estruturados a partir de texto ou áudio transcrito.
-   - Valida JWT e quotas de IA antes do consumo.
+   - Gera propostas comerciais e orçamentos estruturados a partir de texto ou áudio transcrito (exclusivo TURBO).
+   - Valida JWT e quotas atômicas de IA antes do consumo.
+   - **`test_connection`**: Endpoint de diagnóstico que testa a conectividade com o Google Gemini para usuários autenticados sem consumir quota e sem exigir plano TURBO.
    - Comunica-se com o modelo Gemini usando structured JSON output.
 
 2. **`stripe-webhook`**:
    - Processa eventos do Stripe (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`).
-   - Valida assinatura HMAC do Stripe.
-   - Aplica idempotência através da tabela de eventos processados.
+   - Valida assinatura HMAC-SHA256 do Stripe e previne ataques de repetição.
+   - **Resolução Estrita de Planos**: Nunca concede PRO silenciosamente para produtos ou preços desconhecidos. Se não reconhecido, registra aviso e preserva o plano atual.
+   - Aplica idempotência através da tabela `stripe_events`.
    - Altera planos no banco de dados com autoridade exclusiva `service_role`.
 
 3. **`whatsapp-webhook`**:
-   - Recebe eventos de mensagens recebidas e status de envio da Meta.
-   - Valida `X-Hub-Signature-256`.
-   - Trata comandos de descadastramento (`STOP`, `PARAR`).
+   - Recebe eventos de mensagens recebidas e status de envio da Meta Cloud API.
+   - Valida assinatura criptográfica `X-Hub-Signature-256`.
+   - **Roteamento Híbrido Seguro (`resolveCentralWhatsappOwner`)**:
+     - *MODO A (Individual)*: Localiza o tenant proprietário via `phone_number_id` cadastrado em `whatsapp_connections` com prioridade total.
+     - *MODO B (Central Compartilhado)*: Caso recebido no número central do FechaZap, localiza candidatos por telefone totalmente normalizado (DDI+DDD+número). Recência é usada apenas para descartar inativos (> 12 meses). Se restarem 2 ou mais ativos, o status é obrigatoriamente AMBIGUOUS com falha segura (descarta sem associar arbitrariamente) e emissão de log estruturado.
+   - Trata comandos automáticos de descadastro (`STOP`, `PARAR`, `CANCELAR`).
    - Persiste histórico em `mensagens_whatsapp` para o tenant correspondente.
 
 4. **`whatsapp-followup`**:
    - Envia mensagens de acompanhamento comercial via WhatsApp Cloud API oficial (plano TURBO) com fallback universal `wa.me`.
+   - **Modelo Híbrido Outbound**:
+     - Se o usuário tem conexão ativa em `whatsapp_connections`, prioriza sua conexão individual e valida o `phone_number_id`.
+     - Se não possui conexão individual, utiliza com segurança o WhatsApp central autorizado do FechaZap configurado no servidor (`PHONE_NUMBER_ID` e `WHATSAPP_TOKEN`).
+     - Rejeita qualquer tentativa de utilizar `phone_number_id` alheio com 403.
+     - Nunca expõe tokens ao frontend nem armazena em localStorage.
 
 ### Deploy das Edge Functions
 ```bash
@@ -129,7 +140,8 @@ supabase functions deploy whatsapp-followup
 ## 6. Inteligência Artificial (Google Gemini)
 
 - **Modelo Utilizado:** Gemini Flash otimizado para alta velocidade e baixa latência.
-- **Segurança de Quota:** Usuários FREE e PRO têm 0 créditos de IA no backend e são bloqueados antes de qualquer requisição. Usuários TURBO recebem 1.500 créditos mensais.
+- **Segurança de Quota:** Usuários FREE e PRO têm 0 créditos de IA no backend e são bloqueados antes de qualquer requisição comercial. Usuários TURBO recebem 1.500 créditos mensais debitados atomicamente via `consume_ai_quota`.
+- **Diagnóstico:** O teste de conexão está disponível para qualquer usuário autenticado para verificar a prontidão do backend sem consumir quota.
 - **Resiliência:** Tratamento específico de erros 503, sanitização de JSON com regex e fallback para resposta padrão sem interrupção de fluxo.
 
 ---
@@ -137,8 +149,11 @@ supabase functions deploy whatsapp-followup
 ## 7. WhatsApp & Políticas de Mensageria
 
 - **Modo Manual:** Geração de link universal `https://wa.me/55...` com mensagem personalizada e chave PIX para qualquer plano sem necessidade de configuração complexa.
-- **Modo Oficial Cloud API:** Disparo de templates homologados via Edge Function para planos TURBO com WhatsApp Business API.
-- **Isolamento de Tenant:** Proibido roteamento heurístico por DDD ou tenant aleatório; todo evento exige validação de identificador de empresa e deduplicação de mensagens.
+- **Modo Oficial Cloud API (Híbrido Controlado):**
+  - **MODO A (Individual):** Conexão individual do usuário tem prioridade total e utiliza credenciais/canal exclusivos do usuário.
+  - **MODO B (Central Compartilhado):** Fallback seguro para o WhatsApp central autorizado do FechaZap quando o usuário não possui conexão individual ativa.
+  - **Segurança de Ambiguidade:** Em caso de múltiplos prestadores com o mesmo cliente no número central sem remetente único recente, executa falha segura (fechada) sem atribuição arbitrária.
+  - **Privacidade de Credenciais:** Tokens de acesso e segredos de webhook nunca são expostos ao cliente web nem armazenados no localStorage.
 
 ---
 

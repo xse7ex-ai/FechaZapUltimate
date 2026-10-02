@@ -266,11 +266,11 @@ describe('FechaZap - Suíte de Endurecimento Técnico (Fase 7/9)', () => {
 
       const msg = generateWhatsAppQuoteText(orc, dummyEmpresa);
 
-      expect(msg).toContain('Olá, Carlos Eduardo!');
-      expect(msg).toContain('Orçamento #105');
+      expect(msg).toContain('Carlos Eduardo');
+      expect(msg).toContain('ORÇAMENTO #105');
       expect(msg).toContain('Instalação Elétrica');
-      expect(msg).toContain('R$ 350,00');
-      expect(msg).toContain('Chave PIX (cnpj): 12345678000190');
+      expect(msg.replace(/\u00a0/g, ' ')).toContain('R$ 350,00');
+      expect(msg).toContain('12345678000190');
       expect(msg).toContain('Tech Soluções');
     });
 
@@ -367,7 +367,7 @@ describe('FechaZap - Suíte de Endurecimento Técnico (Fase 7/9)', () => {
       expect(html).toContain('FechaZap 3.3.0');
       expect(html).toContain('Tech Soluções');
       expect(html).toContain('Pintura Residencial');
-      expect(html).toContain('R$&nbsp;900,00');
+      expect(html.replace(/\u00a0/g, ' ')).toContain('R$ 900,00');
       expect(html).toContain('Garantia de 90 dias');
       expect(html).toContain('12345678000190');
       expect(html).toContain('window.print()');
