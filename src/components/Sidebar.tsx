@@ -11,6 +11,7 @@ import {
   Moon,
   User,
   MessageSquare,
+  Mail,
 } from 'lucide-react';
 import { ActiveTab, ConfiguracaoEmpresa, TipoPlano } from '../types';
 import { useTheme } from '../context/ThemeContext';
@@ -198,6 +199,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <HelpCircle className="w-4 h-4 text-emerald-400 group-hover:text-emerald-300" />
           <span>Tutorial & Guia FechaZap</span>
         </button>
+
+        <a
+          href="mailto:fechazap.suporte@gmail.com"
+          className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors group cursor-pointer"
+          title="Enviar e-mail para fechazap.suporte@gmail.com"
+        >
+          <div className="flex items-center gap-3">
+            <Mail className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+            <span>Suporte</span>
+          </div>
+          <span className="text-[10px] text-slate-500 group-hover:text-slate-300">
+            E-mail ✉️
+          </span>
+        </a>
       </div>
     </aside>
   );

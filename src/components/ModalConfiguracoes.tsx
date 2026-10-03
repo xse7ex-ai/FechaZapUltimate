@@ -21,6 +21,8 @@ import {
   Unlink,
   Link2,
   ExternalLink,
+  Mail,
+  LifeBuoy,
 } from 'lucide-react';
 import { ConfiguracaoEmpresa, WhatsAppConnection } from '../types';
 import { testarConexaoGemini, GeminiStatusResult } from '../utils/ai';
@@ -723,6 +725,41 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Suporte & Atendimento FechaZap */}
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <LifeBuoy className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
+                  Suporte & Atendimento
+                </span>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/50 dark:border-emerald-700/50">
+                Canal Oficial
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              Dúvidas, sugestões ou problemas técnicos? Nossa equipe de suporte está à disposição para ajudar.
+            </p>
+
+            <a
+              href="mailto:fechazap.suporte@gmail.com"
+              className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/80 hover:border-emerald-400 dark:hover:border-emerald-600 text-slate-800 dark:text-slate-100 shadow-xs hover:shadow-md transition-all group cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-200 dark:border-emerald-800">
+                  <Mail className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                </div>
+                <div className="truncate">
+                  <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">E-mail de Suporte</p>
+                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate">fechazap.suporte@gmail.com</p>
+                </div>
+              </div>
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500 shrink-0 ml-2" />
+            </a>
           </div>
 
           {/* Action Buttons */}
