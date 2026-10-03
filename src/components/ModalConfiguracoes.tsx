@@ -762,6 +762,29 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
             </a>
           </div>
 
+          {/* Links: Termos de Uso e Política de Privacidade */}
+          <div className="flex items-center justify-center gap-4 text-xs text-slate-500 dark:text-slate-400 pt-1">
+            <a
+              href="/termos.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors hover:underline"
+            >
+              <span>Termos de Uso</span>
+              <ExternalLink className="w-3 h-3 text-slate-400" />
+            </a>
+            <span className="text-slate-300 dark:text-slate-700">•</span>
+            <a
+              href="/privacidade.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors hover:underline"
+            >
+              <span>Política de Privacidade</span>
+              <ExternalLink className="w-3 h-3 text-slate-400" />
+            </a>
+          </div>
+
           {/* Action Buttons */}
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
