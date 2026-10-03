@@ -37,7 +37,7 @@ export function isCloudSyncEnabled(plano: TipoPlano): boolean {
   return plano === 'PRO' || plano === 'TURBO';
 }
 
-function getSyncQueue(userId: string | null | undefined): PendingSyncItem[] {
+export function getSyncQueue(userId: string | null | undefined): PendingSyncItem[] {
   return loadUserSyncQueue<PendingSyncItem>(userId);
 }
 

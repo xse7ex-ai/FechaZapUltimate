@@ -50,6 +50,7 @@ import {
   syncSaveCliente,
   syncDeleteCliente,
   flushPendingSyncQueue,
+  getSyncQueue,
 } from './utils/sync';
 import {
   loadUserOrcamentos,
@@ -265,19 +266,77 @@ export default function App() {
         if (cloud.orcamentos.length > 0 || cloud.clientes.length > 0) {
           // Servidor possui dados: mescla preservando criações locais offline pertencentes a este usuário
           setOrcamentos((prev) => {
+            const queue = getSyncQueue(targetEffectiveId);
+            const pendingDeleteIds = new Set(
+              queue.filter((q) => q.type === 'delete_orcamento').map((q) => q.id)
+            );
+            const pendingSaveIds = new Set(
+              queue.filter((q) => q.type === 'save_orcamento').map((q) => q.id)
+            );
+
+            // 1. Processa itens vindos da nuvem
+            const resolvedCloud: Orcamento[] = [];
+            for (const cloudItem of cloud.orcamentos) {
+              if (pendingDeleteIds.has(cloudItem.id)) {
+                // Exclusão pendente na fila: excluir mesmo que ainda exista na nuvem
+                continue;
+              }
+              if (pendingSaveIds.has(cloudItem.id)) {
+                // Edição pendente na fila: usar a versão local (de prev)
+                const localItem = prev.find((p) => p.id === cloudItem.id);
+                resolvedCloud.push(localItem || cloudItem);
+              } else {
+                // Sem pendência: nuvem é a fonte de verdade
+                resolvedCloud.push(cloudItem);
+              }
+            }
+
+            // 2. Itens que só existem localmente (em prev)
             const cloudIds = new Set(cloud.orcamentos.map((c) => c.id));
-            const localOnly = prev.filter((p) => !cloudIds.has(p.id));
+            const localOnly = prev.filter(
+              (p) => !cloudIds.has(p.id) && !pendingDeleteIds.has(p.id)
+            );
             localOnly.forEach((o) => syncSaveOrcamento(o, plano, targetEffectiveId));
-            const merged = [...cloud.orcamentos, ...localOnly];
+
+            const merged = [...resolvedCloud, ...localOnly];
             saveUserOrcamentos(targetEffectiveId, merged);
             return merged;
           });
 
           setClientes((prev) => {
+            const queue = getSyncQueue(targetEffectiveId);
+            const pendingDeleteIds = new Set(
+              queue.filter((q) => q.type === 'delete_cliente').map((q) => q.id)
+            );
+            const pendingSaveIds = new Set(
+              queue.filter((q) => q.type === 'save_cliente').map((q) => q.id)
+            );
+
+            // 1. Processa itens vindos da nuvem
+            const resolvedCloud: Cliente[] = [];
+            for (const cloudItem of cloud.clientes) {
+              if (pendingDeleteIds.has(cloudItem.id)) {
+                // Exclusão pendente na fila: excluir mesmo que ainda exista na nuvem
+                continue;
+              }
+              if (pendingSaveIds.has(cloudItem.id)) {
+                // Edição pendente na fila: usar a versão local (de prev)
+                const localItem = prev.find((p) => p.id === cloudItem.id);
+                resolvedCloud.push(localItem || cloudItem);
+              } else {
+                // Sem pendência: nuvem é a fonte de verdade
+                resolvedCloud.push(cloudItem);
+              }
+            }
+
+            // 2. Itens que só existem localmente (em prev)
             const cloudIds = new Set(cloud.clientes.map((c) => c.id));
-            const localOnly = prev.filter((p) => !cloudIds.has(p.id));
+            const localOnly = prev.filter(
+              (p) => !cloudIds.has(p.id) && !pendingDeleteIds.has(p.id)
+            );
             localOnly.forEach((c) => syncSaveCliente(c, plano, targetEffectiveId));
-            const merged = [...cloud.clientes, ...localOnly];
+
+            const merged = [...resolvedCloud, ...localOnly];
             saveUserClientes(targetEffectiveId, merged);
             return merged;
           });
