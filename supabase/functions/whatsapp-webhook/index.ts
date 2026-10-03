@@ -395,35 +395,26 @@ Deno.serve(async (req) => {
             // Prioridade:
             //   1. MODO A: Conexão Individual Ativa (whatsapp_connections)
             //   2. MODO B: WhatsApp Central Compartilhado do FechaZap (centralPhoneId)
+            // REGRA CRÍTICA DE SEGURANÇA (PARTE 3 & 4):
+            // O canal central NUNCA pode ser interceptado por uma conexão individual arbitrária.
             // =========================================================================
             if (!phoneNumberId) {
               console.warn('[whatsapp-webhook] Mensagem descartada: metadata.phone_number_id ausente.');
               continue;
             }
 
-            // PASSO 1: Verificar se este phone_number_id pertence a uma conexão individual ativa
-            const { data: conn } = await supabaseAdmin
-              .from('whatsapp_connections')
-              .select('user_id, status')
-              .eq('phone_number_id', phoneNumberId)
-              .eq('status', 'active')
-              .maybeSingle();
+            const isCentralChannel = Boolean(
+              centralPhoneId &&
+              (phoneNumberId === centralPhoneId ||
+                phoneNumberId === '106934522435791' ||
+                phoneNumberId.includes('central_fechazap'))
+            );
 
             let ownerUserId: string | null = null;
 
-            if (conn?.user_id) {
-              // MODO A: Conexão individual do prestador tem prioridade total
-              ownerUserId = conn.user_id;
-            } else {
-              // PASSO 2: Verificar se é o número central compartilhado do FechaZap
-              if (!centralPhoneId || phoneNumberId !== centralPhoneId) {
-                console.warn(
-                  `[whatsapp-webhook] Nenhuma conexão ativa encontrada para phone_number_id="${phoneNumberId}" e número não é o central. Mensagem descartada por segurança.`
-                );
-                continue;
-              }
-
+            if (isCentralChannel) {
               // MODO B: Resolução Segura de Proprietário no WhatsApp Central Compartilhado
+              // Nenhuma conexão individual pode sequestrar o canal central
               const resolution = await resolveCentralWhatsappOwner(supabaseAdmin, cleanFrom, phoneNumberId);
 
               if (resolution.status !== 'RESOLVED' || !resolution.userId) {
@@ -432,6 +423,23 @@ Deno.serve(async (req) => {
               }
 
               ownerUserId = resolution.userId;
+            } else {
+              // MODO A: Conexão Individual Ativa (apenas para números não-centrais)
+              const { data: conn } = await supabaseAdmin
+                .from('whatsapp_connections')
+                .select('user_id, status, phone_number_id')
+                .eq('phone_number_id', phoneNumberId)
+                .eq('status', 'active')
+                .maybeSingle();
+
+              if (conn?.user_id) {
+                ownerUserId = conn.user_id;
+              } else {
+                console.warn(
+                  `[whatsapp-webhook] Nenhuma conexão ativa encontrada para phone_number_id="${phoneNumberId}" e número não é o central. Mensagem descartada por segurança.`
+                );
+                continue;
+              }
             }
 
             if (!ownerUserId) {

@@ -76,6 +76,37 @@ class MockWhatsAppWebhookService {
     this.connections.push(conn);
   }
 
+  registerConnection(userId: string, phoneNumberId: string, plano: string = 'TURBO', wabaId?: string) {
+    if (
+      (this.centralPhoneNumberId && phoneNumberId === this.centralPhoneNumberId) ||
+      phoneNumberId === '106934522435791' ||
+      phoneNumberId.includes('central_fechazap')
+    ) {
+      throw new Error('FORBIDDEN_CENTRAL_PHONE: O identificador central do FechaZap não pode ser cadastrado como conexão individual.');
+    }
+    if (wabaId && (wabaId === 'central_waba_fechazap' || wabaId === '106934522435790' || wabaId.includes('central_waba'))) {
+      throw new Error('FORBIDDEN_CENTRAL_WABA: O WABA ID central do FechaZap não pode ser cadastrado como conexão individual.');
+    }
+    const alreadyClaimed = this.connections.some(
+      (c) => c.phoneNumberId === phoneNumberId && c.status === 'active' && c.userId !== userId
+    );
+    if (alreadyClaimed) {
+      throw new Error('PHONE_NUMBER_ALREADY_CLAIMED: Este phone_number_id já está vinculado ativamente a outro usuário.');
+    }
+    if (plano !== 'TURBO') {
+      throw new Error('UPGRADE_REQUIRED: Apenas usuários com plano TURBO podem ativar conexões comerciais individuais da Meta Cloud API.');
+    }
+    this.connections = this.connections.filter((c) => c.userId !== userId);
+    this.connections.push({
+      id: `conn-${Date.now()}`,
+      userId,
+      phoneNumberId,
+      wabaId,
+      status: 'active',
+    });
+    return { success: true };
+  }
+
   addClient(client: MockClient) {
     this.clients.push(client);
   }
@@ -118,18 +149,18 @@ class MockWhatsAppWebhookService {
           continue;
         }
 
-        // 3. Roteamento Híbrido:
-        // Prioridade MODO A: Conexão individual ativa
-        const conn = this.connections.find(
-          (c) => c.phoneNumberId === phoneNumberId && c.status === 'active'
+        // 3. Roteamento Híbrido Seguro:
+        const isCentral = Boolean(
+          this.centralPhoneNumberId &&
+          (phoneNumberId === this.centralPhoneNumberId ||
+            phoneNumberId === '106934522435791' ||
+            phoneNumberId.includes('central_fechazap'))
         );
 
         let ownerUserId: string | null = null;
 
-        if (conn) {
-          ownerUserId = conn.userId;
-        } else if (this.centralPhoneNumberId && phoneNumberId === this.centralPhoneNumberId) {
-          // MODO B: Número central compartilhado do FechaZap
+        if (isCentral) {
+          // MODO B: Número central compartilhado do FechaZap (nunca interceptável por conexão individual)
           const messages = value.messages || [];
           const candidateFrom = messages[0]?.from;
           if (!candidateFrom) continue;
@@ -204,8 +235,16 @@ class MockWhatsAppWebhookService {
             continue;
           }
         } else {
-          // Inativo, revogado, inexistente ou canal desconhecido -> descartar
-          continue;
+          // MODO A: Conexão individual ativa (canal não-central)
+          const conn = this.connections.find(
+            (c) => c.phoneNumberId === phoneNumberId && c.status === 'active'
+          );
+          if (conn) {
+            ownerUserId = conn.userId;
+          } else {
+            // Inativo, revogado, inexistente ou canal desconhecido -> descartar
+            continue;
+          }
         }
 
         if (!ownerUserId) {
@@ -1033,6 +1072,100 @@ describe('WhatsApp Cloud API Multi-Tenant - Validações da Fase 5/9', () => {
       expect(webService.lastRoutingStatus).toBe('AMBIGUOUS');
       expect(webService.getMessagesForUser(userRecent).length).toBe(0);
       expect(webService.getMessagesForUser(userOlder).length).toBe(0);
+    });
+
+    it('16. Segurança: Usuário A tenta registrar phone_number_id central → deve falhar com FORBIDDEN_CENTRAL_PHONE', () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      
+      expect(() => {
+        webService.registerConnection('user-malicioso-1', CENTRAL_ID, 'TURBO');
+      }).toThrow('FORBIDDEN_CENTRAL_PHONE');
+
+      expect(() => {
+        webService.registerConnection('user-malicioso-1', '106934522435791', 'TURBO');
+      }).toThrow('FORBIDDEN_CENTRAL_PHONE');
+
+      expect(() => {
+        webService.registerConnection('user-malicioso-1', 'phone-normal-999', 'TURBO', 'central_waba_fechazap');
+      }).toThrow('FORBIDDEN_CENTRAL_WABA');
+    });
+
+    it('17. Segurança: Usuário A tenta ativar arbitrariamente phone_number_id de terceiro → deve falhar com PHONE_NUMBER_ALREADY_CLAIMED', () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      
+      // Usuário B registra legitimamente seu número
+      const userB = 'user-prestador-b';
+      const userA = 'user-atacante-a';
+      const phoneB = 'phone-comercial-empresa-b-888';
+
+      webService.registerConnection(userB, phoneB, 'TURBO');
+
+      // Usuário A tenta registrar o mesmo número de B enquanto ativo
+      expect(() => {
+        webService.registerConnection(userA, phoneB, 'TURBO');
+      }).toThrow('PHONE_NUMBER_ALREADY_CLAIMED');
+    });
+
+    it('18. Inbound: Usuário A possui conexão válida individual → inbound chega para A sem tocar número central', async () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      const userA = 'user-prestador-a';
+      const phoneA = 'phone-comercial-empresa-a-777';
+      const clienteDoA = '5511988887777';
+
+      webService.registerConnection(userA, phoneA, 'TURBO');
+      webService.addClient({
+        id: 'cli-a-1',
+        userId: userA,
+        telefone: clienteDoA,
+        whatsappOptIn: true,
+      });
+
+      const payload = {
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            changes: [
+              {
+                field: 'messages',
+                value: {
+                  metadata: { phone_number_id: phoneA },
+                  messages: [
+                    {
+                      id: 'wamid_individual_a_direct',
+                      from: clienteDoA,
+                      type: 'text',
+                      text: { body: 'Olá, gostaria de fechar o orçamento.' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const raw = JSON.stringify(payload);
+      const sig = `sha256=${createHmac('sha256', SECRET).update(raw).digest('hex')}`;
+      const res = await webService.processWebhook(raw, sig);
+
+      expect(res.status).toBe(200);
+      expect(res.processed).toBe(1);
+      const userAMsgs = webService.getMessagesForUser(userA);
+      expect(userAMsgs.length).toBe(1);
+      expect(userAMsgs[0].waMessageId).toBe('wamid_individual_a_direct');
+      expect(userAMsgs[0].corpo).toBe('Olá, gostaria de fechar o orçamento.');
+    });
+
+    it('19. Segurança: Usuário sem plano TURBO tenta registrar conexão individual → deve falhar com UPGRADE_REQUIRED', () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+
+      expect(() => {
+        webService.registerConnection('user-free-1', 'phone-novo-123', 'GRATUITO');
+      }).toThrow('UPGRADE_REQUIRED');
+
+      expect(() => {
+        webService.registerConnection('user-pro-1', 'phone-novo-123', 'PRO');
+      }).toThrow('UPGRADE_REQUIRED');
     });
   });
 });

@@ -427,13 +427,27 @@ export async function saveWhatsAppConnection(params: {
   phoneNumberId: string;
   displayPhoneNumber?: string;
 }): Promise<{ success: boolean; error?: string }> {
+  const cleanPhoneId = params.phoneNumberId.trim();
+
+  // Validação preventiva client-side (reforçada pelo trigger trg_check_whatsapp_connection_security no PostgreSQL)
+  if (
+    cleanPhoneId === 'central_fechazap_shared_106934522435791' ||
+    cleanPhoneId === '106934522435791' ||
+    cleanPhoneId.toLowerCase().includes('central_fechazap')
+  ) {
+    return {
+      success: false,
+      error: 'O identificador central do FechaZap não pode ser cadastrado como conexão individual.',
+    };
+  }
+
   if (!client) {
     const activeId = getCachedUserId() || 'guest';
     const mockConn: import('../types').WhatsAppConnection = {
       id: `conn-${Date.now()}`,
       userId: activeId,
       wabaId: params.wabaId,
-      phoneNumberId: params.phoneNumberId,
+      phoneNumberId: cleanPhoneId,
       displayPhoneNumber: params.displayPhoneNumber,
       status: 'active',
       createdAt: new Date().toISOString(),
@@ -453,17 +467,32 @@ export async function saveWhatsAppConnection(params: {
       return { success: false, error: 'Usuário não autenticado.' };
     }
 
-    // Desativa conexões anteriores se houver
+    // Tenta primeiro a RPC autoritativa register_whatsapp_connection
+    const { data: rpcData, error: rpcErr } = await client.rpc('register_whatsapp_connection', {
+      p_phone_number_id: cleanPhoneId,
+      p_waba_id: params.wabaId?.trim() || null,
+      p_display_phone_number: params.displayPhoneNumber?.trim() || null,
+    });
+
+    if (!rpcErr && rpcData?.success) {
+      return { success: true };
+    }
+
+    if (rpcErr && !rpcErr.message?.includes('function public.register_whatsapp_connection') && !rpcErr.message?.includes('does not exist')) {
+      return { success: false, error: rpcErr.message };
+    }
+
+    // Fallback: Desativa conexões anteriores se houver
     await client
       .from('whatsapp_connections')
       .update({ status: 'inactive', updated_at: new Date().toISOString() })
       .eq('user_id', authData.user.id);
 
-    // Insere nova conexão ativa
+    // Insere nova conexão ativa (o trigger no Postgres valida e barra centralPhoneId e sequestro)
     const { error } = await client.from('whatsapp_connections').insert({
       user_id: authData.user.id,
-      waba_id: params.wabaId || null,
-      phone_number_id: params.phoneNumberId.trim(),
+      waba_id: params.wabaId?.trim() || null,
+      phone_number_id: cleanPhoneId,
       display_phone_number: params.displayPhoneNumber?.trim() || null,
       status: 'active',
     });
@@ -616,6 +645,7 @@ export async function attemptClientSidePlanChange(
 export interface QuotaConsumeResult {
   success: boolean;
   quotaExceeded?: boolean;
+  offlineError?: boolean;
   errorMessage?: string;
 }
 
@@ -624,12 +654,17 @@ export interface QuotaConsumeResult {
  * Executada via RPC atômica (check_and_consume_gratuito_quota) no Supabase.
  * - Se exceder quota (P0001 / QUOTA_EXCEEDED), retorna quotaExceeded: true.
  * - Se falhar por conectividade/indisponibilidade (offline, Supabase fora do ar),
- *   retorna success: true permitindo a criação local com log no console.
+ *   retorna success: false com offlineError: true, exigindo conexão e impedindo
+ *   que o usuário ultrapasse os 5 orçamentos mensais ficando offline.
  */
 export async function checkAndConsumeGratuitoQuota(): Promise<QuotaConsumeResult> {
   if (!client) {
-    console.warn('[Quota GRATUITO] Cliente Supabase não configurado. Operação offline permitida.');
-    return { success: true };
+    console.warn('[Quota GRATUITO] Cliente Supabase não configurado. Conexão necessária para validar cota.');
+    return {
+      success: false,
+      offlineError: true,
+      errorMessage: 'É necessária conexão com a internet para validar sua cota mensal de orçamentos no plano GRATUITO.',
+    };
   }
 
   try {
@@ -652,22 +687,29 @@ export async function checkAndConsumeGratuitoQuota(): Promise<QuotaConsumeResult
       }
 
       // Falha por qualquer outro motivo (sem internet, erro de servidor, Supabase indisponível)
-      // Conforme especificação: permitir criação local mesmo assim, com console.warn
       console.warn(
-        '[Quota GRATUITO] Falha ao consultar RPC no Supabase (criação local permitida):',
+        '[Quota GRATUITO] Falha ao consultar RPC no Supabase (bloqueado sem conexão):',
         error.message || error
       );
-      return { success: true };
+      return {
+        success: false,
+        offlineError: true,
+        errorMessage: 'Não foi possível validar sua cota de orçamentos com o servidor. Conecte-se à internet para continuar.',
+      };
     }
 
     return { success: true };
   } catch (err: any) {
     // Exceção de rede (offline, fetch abort, etc.)
     console.warn(
-      '[Quota GRATUITO] Erro de rede ao verificar cota no servidor (criação local permitida):',
+      '[Quota GRATUITO] Erro de rede ao verificar cota no servidor (bloqueado sem conexão):',
       err?.message || err
     );
-    return { success: true };
+    return {
+      success: false,
+      offlineError: true,
+      errorMessage: 'Conexão com a internet necessária para validar a cota de orçamentos no plano GRATUITO.',
+    };
   }
 }
 

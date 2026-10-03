@@ -188,6 +188,15 @@ Deno.serve(async (req) => {
     //   - NUNCA expõe essas credenciais ao frontend nem no localStorage.
     // =========================================================================
     const requestedPhoneId = body?.phoneNumberId || body?.phone_number_id;
+    const centralPhoneId = centralServerPhoneId || '';
+
+    const isCentralId = (id?: string | null) =>
+      Boolean(
+        id &&
+        ((centralPhoneId && id === centralPhoneId) ||
+          id === '106934522435791' ||
+          id.includes('central_fechazap'))
+      );
 
     // PASSO 1: Verificar se existe whatsapp_connections ativa para o usuário autenticado
     const { data: userConn, error: connErr } = await supabaseAdmin
@@ -201,7 +210,8 @@ Deno.serve(async (req) => {
     let effectiveToken = '';
     let connectionMode: 'individual' | 'central' = 'central';
 
-    if (userConn?.phone_number_id) {
+    // Se o usuário possui conexão individual ativa (que NÃO seja o canal central)
+    if (userConn?.phone_number_id && !isCentralId(userConn.phone_number_id)) {
       // MODO A: Conexão individual do usuário tem prioridade absoluta
       if (requestedPhoneId && requestedPhoneId !== userConn.phone_number_id) {
         return new Response(
@@ -219,7 +229,6 @@ Deno.serve(async (req) => {
       connectionMode = 'individual';
     } else {
       // PASSO 2: Fallback controlado para WhatsApp Central Compartilhado Autorizado
-      const centralPhoneId = centralServerPhoneId || '';
       const centralToken = metaToken;
 
       if (!centralPhoneId || !centralToken) {

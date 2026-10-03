@@ -551,18 +551,27 @@ export default function App() {
     // Validação real de quota no servidor para plano GRATUITO (apenas na criação com usuário autenticado fora do modo demonstração)
     if (!isEditing && effectivePlano === 'GRATUITO' && effectiveUserId) {
       const quotaCheck = await checkAndConsumeGratuitoQuota();
-      if (!quotaCheck.success && quotaCheck.quotaExceeded) {
-        addToast(
-          'Limite de Orçamentos Atingido',
-          quotaCheck.errorMessage ||
-            'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados e sincronizar na nuvem.',
-          'error',
-          {
-            label: 'Ver Planos',
-            onClick: () => setIsPerfilOpen(true),
-          }
-        );
-        setIsPerfilOpen(true);
+      if (!quotaCheck.success) {
+        if (quotaCheck.quotaExceeded) {
+          addToast(
+            'Limite de Orçamentos Atingido',
+            quotaCheck.errorMessage ||
+              'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados e sincronizar na nuvem.',
+            'error',
+            {
+              label: 'Ver Planos',
+              onClick: () => setIsPerfilOpen(true),
+            }
+          );
+          setIsPerfilOpen(true);
+        } else {
+          addToast(
+            'Conexão Necessária',
+            quotaCheck.errorMessage ||
+              'Conecte-se à internet para validar sua cota mensal no plano GRATUITO. Seus orçamentos já salvos permanecem seguros.',
+            'warning'
+          );
+        }
         return;
       }
     }
@@ -642,18 +651,27 @@ export default function App() {
     // Validação real de quota no servidor para plano GRATUITO (usuário autenticado fora do modo demonstração)
     if (effectivePlano === 'GRATUITO' && effectiveUserId) {
       const quotaCheck = await checkAndConsumeGratuitoQuota();
-      if (!quotaCheck.success && quotaCheck.quotaExceeded) {
-        addToast(
-          'Limite de Orçamentos Atingido',
-          quotaCheck.errorMessage ||
-            'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados e sincronizar na nuvem.',
-          'error',
-          {
-            label: 'Ver Planos',
-            onClick: () => setIsPerfilOpen(true),
-          }
-        );
-        setIsPerfilOpen(true);
+      if (!quotaCheck.success) {
+        if (quotaCheck.quotaExceeded) {
+          addToast(
+            'Limite de Orçamentos Atingido',
+            quotaCheck.errorMessage ||
+              'O plano GRATUITO permite até 5 orçamentos manuais por mês. Faça upgrade para PRO ou TURBO para criar orçamentos ilimitados e sincronizar na nuvem.',
+            'error',
+            {
+              label: 'Ver Planos',
+              onClick: () => setIsPerfilOpen(true),
+            }
+          );
+          setIsPerfilOpen(true);
+        } else {
+          addToast(
+            'Conexão Necessária',
+            quotaCheck.errorMessage ||
+              'Conecte-se à internet para validar sua cota mensal no plano GRATUITO. Seus orçamentos já salvos permanecem seguros.',
+            'warning'
+          );
+        }
         return;
       }
     }

@@ -287,8 +287,8 @@ describe('FechaZap - Suíte de Endurecimento Técnico (Fase 7/9)', () => {
       expect(turboRes.consumed).toBe(false);
     });
 
-    it('deve permitir criação offline do plano GRATUITO quando Supabase estiver indisponível', () => {
-      // Função simulada de fallback resiliente
+    it('deve bloquear bypass offline e exigir conexão para validar quota do plano GRATUITO', () => {
+      // Função simulada de validação de quota atualizada (Fase Final)
       const evaluateQuotaResult = (error: { code?: string; message?: string } | null) => {
         if (!error) return { success: true };
         const isQuota =
@@ -297,17 +297,22 @@ describe('FechaZap - Suíte de Endurecimento Técnico (Fase 7/9)', () => {
         if (isQuota) {
           return { success: false, quotaExceeded: true };
         }
-        // Falha técnica/rede -> fallback offline permitido
-        return { success: true };
+        // Falha técnica/rede -> bloqueado (offlineError: true) para evitar ultrapassar 5 orçamentos
+        return { success: false, offlineError: true };
       };
 
-      // Erro de rede (Failed to fetch)
-      expect(evaluateQuotaResult({ message: 'TypeError: Failed to fetch' }).success).toBe(true);
+      // Erro de rede (Failed to fetch) -> bloqueia com offlineError
+      const netErr = evaluateQuotaResult({ message: 'TypeError: Failed to fetch' });
+      expect(netErr.success).toBe(false);
+      expect(netErr.offlineError).toBe(true);
 
-      // Erro de quota atingida
+      // Erro de quota atingida -> bloqueia com quotaExceeded
       const quotaErr = evaluateQuotaResult({ code: 'P0001', message: 'QUOTA_EXCEEDED: Limite atingido' });
       expect(quotaErr.success).toBe(false);
       expect(quotaErr.quotaExceeded).toBe(true);
+
+      // Sucesso com conexão
+      expect(evaluateQuotaResult(null).success).toBe(true);
     });
   });
 
