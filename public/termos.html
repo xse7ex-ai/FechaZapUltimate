@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Termos de Uso — FechaZap</title>
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="alternate icon" href="/favicon.ico">
+  <style>
+    :root {
+      --primary: #059669;
+      --primary-hover: #047857;
+      --primary-light: #ecfdf5;
+      --primary-border: #a7f3d0;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --bg-page: #f8fafc;
+      --bg-card: #ffffff;
+      --border-color: #e2e8f0;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #10b981;
+        --primary-hover: #059669;
+        --primary-light: rgba(16, 185, 129, 0.12);
+        --primary-border: rgba(16, 185, 129, 0.3);
+        --text-main: #f1f5f9;
+        --text-muted: #94a3b8;
+        --bg-page: #0f172a;
+        --bg-card: #1e293b;
+        --border-color: #334155;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.65;
+      padding: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      background: var(--bg-card);
+      border-radius: 20px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+      padding: 24px;
+    }
+
+    @media (min-width: 640px) {
+      body {
+        padding: 32px 16px;
+      }
+      .container {
+        padding: 40px;
+      }
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--primary);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 900;
+      font-size: 18px;
+    }
+
+    .brand-name {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-name span {
+      color: var(--primary);
+    }
+
+    .btn-voltar {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: var(--primary-light);
+      color: var(--primary);
+      border: 1px solid var(--primary-border);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .btn-voltar:hover {
+      background: var(--primary);
+      color: #ffffff;
+    }
+
+    .doc-header {
+      margin-bottom: 32px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-main);
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+
+    @media (min-width: 640px) {
+      h1 {
+        font-size: 28px;
+      }
+    }
+
+    .updated-date {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .section {
+      margin-bottom: 28px;
+    }
+
+    h2 {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-bottom: 10px;
+      letter-spacing: -0.2px;
+    }
+
+    p, li {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    a.mail-link {
+      color: var(--primary);
+      font-weight: 600;
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    a.mail-link:hover {
+      text-decoration: underline;
+    }
+
+    .footer {
+      margin-top: 36px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    @media (min-width: 640px) {
+      .footer {
+        flex-direction: row;
+        justify-content: space-between;
+        text-align: left;
+      }
+    }
+
+    .footer-links a {
+      color: var(--primary);
+      text-decoration: none;
+      margin-left: 12px;
+      font-weight: 600;
+    }
+
+    .footer-links a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="top-bar">
+      <a href="/" class="brand">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-name">Fecha<span>Zap</span></div>
+      </a>
+      <a href="/" class="btn-voltar">← Voltar</a>
+    </div>
+
+    <div class="doc-header">
+      <h1>TERMOS DE USO — FECHAZAP</h1>
+      <div class="updated-date">Última atualização: 02 de outubro de 2026</div>
+    </div>
+
+    <div class="section">
+      <h2>1. ACEITAÇÃO</h2>
+      <p>Ao criar uma conta ou usar o FechaZap, você concorda com estes Termos de Uso e com a nossa Política de Privacidade.</p>
+    </div>
+
+    <div class="section">
+      <h2>2. O QUE É O FECHAZAP</h2>
+      <p>O FechaZap é uma ferramenta para criação de orçamentos, gestão de clientes e comunicação via WhatsApp, com planos GRATUITO, PRO e TURBO, com diferentes limites e recursos.</p>
+    </div>
+
+    <div class="section">
+      <h2>3. SUA CONTA</h2>
+      <p>Você é responsável por manter a confidencialidade de sua senha e por todas as atividades realizadas em sua conta.</p>
+    </div>
+
+    <div class="section">
+      <h2>4. RESPONSABILIDADE SOBRE DADOS DE TERCEIROS</h2>
+      <p>Os dados de clientes que você cadastra na plataforma (nome, telefone) são de sua responsabilidade. Você declara ter base legal, e quando aplicável consentimento, para armazenar esses dados e para contatá-los via WhatsApp através do FechaZap.</p>
+    </div>
+
+    <div class="section">
+      <h2>5. USO ACEITÁVEL</h2>
+      <p>É proibido usar o FechaZap para: enviar mensagens não solicitadas (spam) via WhatsApp; violar as políticas comerciais da Meta/WhatsApp; tentar burlar limites de uso ou cota dos planos; qualquer atividade ilegal. O descumprimento pode resultar em suspensão ou cancelamento da conta, sem aviso prévio em casos graves.</p>
+    </div>
+
+    <div class="section">
+      <h2>6. PLANOS E COBRANÇA</h2>
+      <p>Os planos PRO e TURBO são cobrados de forma recorrente (mensal) via Stripe. Você pode cancelar a qualquer momento através da própria plataforma ("Gerenciar assinatura"); o cancelamento interrompe cobranças futuras, sem reembolso proporcional do período já pago, salvo disposição legal em contrário.</p>
+    </div>
+
+    <div class="section">
+      <h2>7. INTELIGÊNCIA ARTIFICIAL</h2>
+      <p>Sugestões geradas por inteligência artificial (valores, descrições de serviço, mensagens) são estimativas e sugestões — não compromissos. Você é responsável por revisar e validar essas informações antes de enviá-las a um cliente.</p>
+    </div>
+
+    <div class="section">
+      <h2>8. DISPONIBILIDADE</h2>
+      <p>O FechaZap depende de serviços de terceiros (Meta/WhatsApp, Google, Stripe, Supabase). Indisponibilidade desses serviços pode afetar temporariamente funcionalidades do FechaZap, e não constitui falha do FechaZap em si.</p>
+    </div>
+
+    <div class="section">
+      <h2>9. LIMITAÇÃO DE RESPONSABILIDADE</h2>
+      <p>O FechaZap é fornecido "como está". Na máxima extensão permitida por lei, não nos responsabilizamos por perdas decorrentes de decisões comerciais tomadas com base em sugestões da plataforma, nem por indisponibilidade de serviços de terceiros.</p>
+    </div>
+
+    <div class="section">
+      <h2>10. CANCELAMENTO DE CONTA</h2>
+      <p>Você pode encerrar sua conta a qualquer momento. Podemos suspender ou encerrar contas que violem estes Termos.</p>
+    </div>
+
+    <div class="section">
+      <h2>11. ALTERAÇÕES</h2>
+      <p>Podemos atualizar estes Termos. Mudanças relevantes serão comunicadas dentro do aplicativo.</p>
+    </div>
+
+    <div class="section">
+      <h2>12. LEI APLICÁVEL</h2>
+      <p>Estes Termos são regidos pela lei brasileira. Fica eleito o foro [sua cidade/comarca] para dirimir controvérsias, salvo disposição legal em contrário.</p>
+    </div>
+
+    <div class="section">
+      <h2>13. CONTATO</h2>
+      <p><a href="mailto:fechazap.suporte@gmail.com" class="mail-link">fechazap.suporte@gmail.com</a></p>
+    </div>
+
+    <div class="footer">
+      <div>© 2026 FechaZap — Todos os direitos reservados.</div>
+      <div class="footer-links">
+        <a href="/termos.html">Termos de Uso</a>
+        <a href="/privacidade.html">Privacidade</a>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

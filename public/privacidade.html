@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Política de Privacidade — FechaZap</title>
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="alternate icon" href="/favicon.ico">
+  <style>
+    :root {
+      --primary: #059669;
+      --primary-hover: #047857;
+      --primary-light: #ecfdf5;
+      --primary-border: #a7f3d0;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --bg-page: #f8fafc;
+      --bg-card: #ffffff;
+      --border-color: #e2e8f0;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #10b981;
+        --primary-hover: #059669;
+        --primary-light: rgba(16, 185, 129, 0.12);
+        --primary-border: rgba(16, 185, 129, 0.3);
+        --text-main: #f1f5f9;
+        --text-muted: #94a3b8;
+        --bg-page: #0f172a;
+        --bg-card: #1e293b;
+        --border-color: #334155;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.65;
+      padding: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      background: var(--bg-card);
+      border-radius: 20px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+      padding: 24px;
+    }
+
+    @media (min-width: 640px) {
+      body {
+        padding: 32px 16px;
+      }
+      .container {
+        padding: 40px;
+      }
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--primary);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 900;
+      font-size: 18px;
+    }
+
+    .brand-name {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-name span {
+      color: var(--primary);
+    }
+
+    .btn-voltar {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: var(--primary-light);
+      color: var(--primary);
+      border: 1px solid var(--primary-border);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .btn-voltar:hover {
+      background: var(--primary);
+      color: #ffffff;
+    }
+
+    .doc-header {
+      margin-bottom: 32px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-main);
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+
+    @media (min-width: 640px) {
+      h1 {
+        font-size: 28px;
+      }
+    }
+
+    .updated-date {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .section {
+      margin-bottom: 28px;
+    }
+
+    h2 {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-bottom: 10px;
+      letter-spacing: -0.2px;
+    }
+
+    p, li {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    ul {
+      margin-left: 20px;
+      margin-bottom: 12px;
+    }
+
+    li {
+      margin-bottom: 6px;
+    }
+
+    a.mail-link {
+      color: var(--primary);
+      font-weight: 600;
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    a.mail-link:hover {
+      text-decoration: underline;
+    }
+
+    .footer {
+      margin-top: 36px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    @media (min-width: 640px) {
+      .footer {
+        flex-direction: row;
+        justify-content: space-between;
+        text-align: left;
+      }
+    }
+
+    .footer-links a {
+      color: var(--primary);
+      text-decoration: none;
+      margin-left: 12px;
+      font-weight: 600;
+    }
+
+    .footer-links a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="top-bar">
+      <a href="/" class="brand">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-name">Fecha<span>Zap</span></div>
+      </a>
+      <a href="/" class="btn-voltar">← Voltar</a>
+    </div>
+
+    <div class="doc-header">
+      <h1>POLÍTICA DE PRIVACIDADE — FECHAZAP</h1>
+      <div class="updated-date">Última atualização: 02 de outubro de 2026</div>
+    </div>
+
+    <div class="section">
+      <h2>1. QUEM SOMOS</h2>
+      <p>O FechaZap é uma plataforma para profissionais autônomos e pequenos negócios criarem orçamentos, gerenciarem clientes e se comunicarem via WhatsApp. É operado por [seu nome ou razão social], [CNPJ, se houver], contato: <a href="mailto:fechazap.suporte@gmail.com" class="mail-link">fechazap.suporte@gmail.com</a>.</p>
+    </div>
+
+    <div class="section">
+      <h2>2. QUE DADOS COLETAMOS</h2>
+      <p><strong>a) Dados do profissional que usa o FechaZap:</strong> nome, e-mail, dados da empresa (nome fantasia, razão social, CNPJ, telefone, chave PIX, endereço) informados nas configurações.</p>
+      <p><strong>b) Dados dos clientes do profissional:</strong> nome e telefone, inseridos pelo próprio profissional ao criar orçamentos. O profissional é responsável por ter base legal e, quando aplicável, consentimento para armazenar e contatar esses dados.</p>
+      <p><strong>c) Dados de uso:</strong> orçamentos criados, mensagens de WhatsApp trocadas através da plataforma, interações com a inteligência artificial.</p>
+      <p><strong>d) Dados de pagamento (planos PRO/TURBO):</strong> processados diretamente pelo Stripe, nosso processador de pagamentos. O FechaZap não armazena número de cartão de crédito.</p>
+    </div>
+
+    <div class="section">
+      <h2>3. COMO ARMAZENAMOS</h2>
+      <p>No plano <strong>GRATUITO</strong>, os dados de orçamentos e clientes ficam apenas no seu próprio aparelho (armazenamento local do navegador), sem ir para nossos servidores.</p>
+      <p>Nos planos <strong>PRO</strong> e <strong>TURBO</strong>, esses dados são também sincronizados com nossos servidores (Supabase), para acesso em múltiplos aparelhos e backup.</p>
+    </div>
+
+    <div class="section">
+      <h2>4. COM QUEM COMPARTILHAMOS</h2>
+      <p>Não vendemos dados pessoais. Compartilhamos dados apenas com prestadores de serviço necessários para o funcionamento da plataforma:</p>
+      <ul>
+        <li>Supabase (banco de dados e autenticação);</li>
+        <li>Meta/WhatsApp Business Platform (envio e recebimento de mensagens, plano TURBO);</li>
+        <li>Google (Gemini API, para geração de sugestões por inteligência artificial, plano TURBO);</li>
+        <li>Stripe (processamento de pagamento, planos PRO/TURBO).</li>
+      </ul>
+      <p>Cada um desses serviços tem sua própria política de privacidade.</p>
+    </div>
+
+    <div class="section">
+      <h2>5. SEUS DIREITOS (LGPD)</h2>
+      <p>Você pode, a qualquer momento, solicitar: confirmação de que tratamos seus dados, acesso aos dados, correção de dados incompletos ou desatualizados, anonimização ou exclusão de dados desnecessários, portabilidade dos dados, e revogação de consentimento. Para exercer esses direitos, envie um e-mail para <a href="mailto:fechazap.suporte@gmail.com" class="mail-link">fechazap.suporte@gmail.com</a>.</p>
+    </div>
+
+    <div class="section">
+      <h2>6. RETENÇÃO</h2>
+      <p>Mantemos seus dados enquanto sua conta estiver ativa. Ao solicitar exclusão da conta, seus dados são removidos dos nossos servidores, exceto quando a lei exigir retenção por período maior (ex: dados fiscais).</p>
+    </div>
+
+    <div class="section">
+      <h2>7. SEGURANÇA</h2>
+      <p>Adotamos medidas técnicas para proteger seus dados, incluindo isolamento entre contas de usuários diferentes e controle de acesso restrito. Nenhum sistema é 100% livre de falhas; em caso de incidente de segurança relevante, notificaremos conforme exigido por lei.</p>
+    </div>
+
+    <div class="section">
+      <h2>8. MENORES DE IDADE</h2>
+      <p>O FechaZap não é direcionado a menores de 18 anos e não coleta intencionalmente dados de menores.</p>
+    </div>
+
+    <div class="section">
+      <h2>9. ALTERAÇÕES</h2>
+      <p>Esta política pode ser atualizada. Mudanças relevantes serão comunicadas dentro do próprio aplicativo.</p>
+    </div>
+
+    <div class="section">
+      <h2>10. CONTATO</h2>
+      <p>Dúvidas sobre esta política: <a href="mailto:fechazap.suporte@gmail.com" class="mail-link">fechazap.suporte@gmail.com</a></p>
+    </div>
+
+    <div class="footer">
+      <div>© 2026 FechaZap — Todos os direitos reservados.</div>
+      <div class="footer-links">
+        <a href="/termos.html">Termos de Uso</a>
+        <a href="/privacidade.html">Privacidade</a>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -393,6 +393,27 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                     <span>{loading ? 'Aguarde...' : isRegisterMode ? 'Cadastrar' : 'Entrar'}</span>
                   </button>
                 </div>
+
+                <div className="pt-2 text-center text-[10px] text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-slate-800/80">
+                  Ao continuar, você concorda com os{' '}
+                  <a
+                    href="/termos.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-emerald-600 dark:hover:text-emerald-400 font-medium"
+                  >
+                    Termos de Uso
+                  </a>
+                  {' '}e a{' '}
+                  <a
+                    href="/privacidade.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-emerald-600 dark:hover:text-emerald-400 font-medium"
+                  >
+                    Política de Privacidade
+                  </a>.
+                </div>
               </form>
             )}
           </div>
