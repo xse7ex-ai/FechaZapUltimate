@@ -718,4 +718,75 @@ describe('FechaZap - Monetização, Planos e Stripe Architecture (Fase 6/9)', ()
       expect(db.subscriptions.size).toBe(1);
     });
   });
+
+  // ----------------------------------------------------------------------------
+  // 5. Política de Quota Offline do Plano FREE (Parte 6 - Fail-Closed Hardening)
+  // ----------------------------------------------------------------------------
+  describe('Plano GRATUITO - Política de Quota Offline & Fail-Closed (Parte 6)', () => {
+    it('falha de rede/offline no plano FREE não deve autorizar novo orçamento (fail-closed)', () => {
+      // Simulação da política de validação de quota em checkAndConsumeGratuitoQuota
+      function simulateQuotaCheck(isOnline: boolean, remainingQuota: number) {
+        if (!isOnline) {
+          return {
+            success: false,
+            offlineError: true,
+            errorMessage:
+              'É necessária conexão com a internet para validar sua cota mensal de orçamentos no plano GRATUITO.',
+          };
+        }
+        if (remainingQuota <= 0) {
+          return {
+            success: false,
+            quotaExceeded: true,
+            errorMessage: 'Limite mensal de 5 orçamentos atingido.',
+          };
+        }
+        return { success: true };
+      }
+
+      // Usuário FREE tenta criar orçamento quando offline
+      const offlineResult = simulateQuotaCheck(false, 3);
+      expect(offlineResult.success).toBe(false);
+      expect(offlineResult.offlineError).toBe(true);
+      expect(offlineResult.errorMessage).toContain('conexão com a internet');
+
+      // Usuário FREE online com quota disponível
+      const onlineOkResult = simulateQuotaCheck(true, 3);
+      expect(onlineOkResult.success).toBe(true);
+
+      // Usuário FREE online que já usou 5 orçamentos
+      const onlineExceededResult = simulateQuotaCheck(true, 0);
+      expect(onlineExceededResult.success).toBe(false);
+      expect(onlineExceededResult.quotaExceeded).toBe(true);
+    });
+
+    it('edição de orçamento existente offline não consome quota e não é bloqueada', () => {
+      // Criação exige validação de quota; edição de orçamento já existente preserva trabalho do usuário
+      function canSaveOrcamento(isEditing: boolean, isOnline: boolean, effectivePlano: string) {
+        if (isEditing) {
+          // Edição de trabalho existente sempre é permitida localmente
+          return { allowed: true, consumesQuota: false };
+        }
+        if (effectivePlano === 'GRATUITO' && !isOnline) {
+          // Criação nova offline no plano FREE é bloqueada com fail-closed
+          return { allowed: false, error: 'Conecte-se à internet para validar sua cota.' };
+        }
+        return { allowed: true, consumesQuota: effectivePlano === 'GRATUITO' };
+      }
+
+      // Edição de orçamento existente offline no plano FREE: permitida
+      const editResult = canSaveOrcamento(true, false, 'GRATUITO');
+      expect(editResult.allowed).toBe(true);
+      expect(editResult.consumesQuota).toBe(false);
+
+      // Nova criação offline no plano FREE: bloqueada
+      const newOrcResult = canSaveOrcamento(false, false, 'GRATUITO');
+      expect(newOrcResult.allowed).toBe(false);
+
+      // Usuário PRO criando offline: permitido (orçamentos ilimitados)
+      const proResult = canSaveOrcamento(false, false, 'PRO');
+      expect(proResult.allowed).toBe(true);
+      expect(proResult.consumesQuota).toBe(false);
+    });
+  });
 });

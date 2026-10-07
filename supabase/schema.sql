@@ -584,16 +584,18 @@ CREATE POLICY "Usuário exclui suas próprias conexões"
   ON public.whatsapp_connections FOR DELETE
   USING (auth.uid() = user_id);
 
--- SEGURANÇA MÁXIMA (Regra 9):
+-- SEGURANÇA MÁXIMA (Regra 9 e Hardening Final):
 -- O token de acesso NUNCA é exposto ao frontend.
--- Revoga acesso à coluna sensível para conexões públicas/autenticadas.
--- Somente o service_role das Edge Functions acessa o token protegido.
+-- Inserção direta via PostgREST/tabela é revogada: o backend (RPC register_whatsapp_connection)
+-- é a autoridade exclusiva sobre quais phone_number_id pertencem a quais usuários.
 REVOKE ALL (access_token_encrypted) ON public.whatsapp_connections FROM anon, authenticated;
+REVOKE INSERT ON public.whatsapp_connections FROM anon, authenticated, PUBLIC;
 GRANT SELECT (id, user_id, waba_id, phone_number_id, display_phone_number, status, created_at, updated_at) ON public.whatsapp_connections TO authenticated;
-GRANT INSERT (user_id, waba_id, phone_number_id, display_phone_number, status) ON public.whatsapp_connections TO authenticated;
-GRANT UPDATE (waba_id, phone_number_id, display_phone_number, status) ON public.whatsapp_connections TO authenticated;
+GRANT UPDATE (status, updated_at) ON public.whatsapp_connections TO authenticated;
 GRANT DELETE ON public.whatsapp_connections TO authenticated;
 GRANT ALL ON public.whatsapp_connections TO service_role;
+
+DROP POLICY IF EXISTS "Usuário insere suas próprias conexões" ON public.whatsapp_connections;
 
 -- 14. Isolamento Multi-Tenant Estrito do WhatsApp
 -- NOTA DE ARQUITETURA E SEGURANÇA:

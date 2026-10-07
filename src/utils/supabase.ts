@@ -467,38 +467,19 @@ export async function saveWhatsAppConnection(params: {
       return { success: false, error: 'Usuário não autenticado.' };
     }
 
-    // Tenta primeiro a RPC autoritativa register_whatsapp_connection
+    // Chamada autoritativa via RPC SECURITY DEFINER (o backend é a autoridade sobre phone_number_id)
     const { data: rpcData, error: rpcErr } = await client.rpc('register_whatsapp_connection', {
       p_phone_number_id: cleanPhoneId,
       p_waba_id: params.wabaId?.trim() || null,
       p_display_phone_number: params.displayPhoneNumber?.trim() || null,
     });
 
-    if (!rpcErr && rpcData?.success) {
-      return { success: true };
+    if (rpcErr) {
+      return { success: false, error: rpcErr.message || 'Falha ao registrar conexão no servidor.' };
     }
 
-    if (rpcErr && !rpcErr.message?.includes('function public.register_whatsapp_connection') && !rpcErr.message?.includes('does not exist')) {
-      return { success: false, error: rpcErr.message };
-    }
-
-    // Fallback: Desativa conexões anteriores se houver
-    await client
-      .from('whatsapp_connections')
-      .update({ status: 'inactive', updated_at: new Date().toISOString() })
-      .eq('user_id', authData.user.id);
-
-    // Insere nova conexão ativa (o trigger no Postgres valida e barra centralPhoneId e sequestro)
-    const { error } = await client.from('whatsapp_connections').insert({
-      user_id: authData.user.id,
-      waba_id: params.wabaId?.trim() || null,
-      phone_number_id: cleanPhoneId,
-      display_phone_number: params.displayPhoneNumber?.trim() || null,
-      status: 'active',
-    });
-
-    if (error) {
-      return { success: false, error: error.message };
+    if (rpcData && rpcData.success === false) {
+      return { success: false, error: rpcData.error || 'Falha ao registrar conexão.' };
     }
 
     return { success: true };

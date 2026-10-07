@@ -134,3 +134,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 REVOKE ALL ON FUNCTION public.register_whatsapp_connection(TEXT, TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.register_whatsapp_connection(TEXT, TEXT, TEXT) TO authenticated, service_role;
+
+-- 4. Revogação de Inserção Direta: o frontend não pode mais criar status active diretamente
+REVOKE INSERT ON public.whatsapp_connections FROM anon, authenticated, PUBLIC;
+DROP POLICY IF EXISTS "Usuário insere suas próprias conexões" ON public.whatsapp_connections;
