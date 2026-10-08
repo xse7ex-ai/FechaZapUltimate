@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "FechaZap - Orçamentos",
-  "short_name": "FechaZap",
-  "description": "Aplicativo profissional de orçamentos rápidos e fechamento de vendas pelo WhatsApp com IA.",
+  "name": "Fecha CRM - Gestão de Orçamentos",
+  "short_name": "Fecha CRM",
+  "description": "Plataforma de CRM e gestão de orçamentos com suporte e comunicação via WhatsApp.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

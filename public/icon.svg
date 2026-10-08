@@ -22,7 +22,7 @@
 
   <!-- Modern Lightning Zap with Dynamic Angle -->
   <g filter="url(#shadow)">
-    <!-- Central Lightning Bolt (FechaZap ⚡) -->
+    <!-- Central Lightning Bolt (Fecha CRM ⚡) -->
     <path
       d="M285 64 L160 272 L252 272 L215 448 L356 236 L264 236 Z"
       fill="url(#boltGrad)"

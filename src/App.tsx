@@ -34,6 +34,8 @@ import { ModalPerfilUsuario } from './components/ModalPerfilUsuario';
 import { TutorialModal } from './components/TutorialModal';
 import { Toast, ToastMessage } from './components/Toast';
 import { NotificationBanner } from './components/NotificationBanner';
+import { PoliticaPrivacidadeView } from './components/PoliticaPrivacidadeView';
+import { TermosUsoView } from './components/TermosUsoView';
 import { checkGeminiStatus } from './utils/ai';
 import {
   fetchServerUserProfileAndQuota,
@@ -105,6 +107,32 @@ export default function App() {
   const [isConfigOpen, setIsConfigOpen] = useState<boolean>(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
   const [isPerfilOpen, setIsPerfilOpen] = useState<boolean>(false);
+
+  // Rotas Legais Meta & LGPD (/privacidade e /termos)
+  const [legalRoute, setLegalRoute] = useState<'privacidade' | 'termos' | null>(() => {
+    if (typeof window !== 'undefined') {
+      const p = window.location.pathname.toLowerCase();
+      if (p.startsWith('/privacidade')) return 'privacidade';
+      if (p.startsWith('/termos')) return 'termos';
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const p = window.location.pathname.toLowerCase();
+      if (p.startsWith('/privacidade')) {
+        setLegalRoute('privacidade');
+      } else if (p.startsWith('/termos')) {
+        setLegalRoute('termos');
+      } else {
+        setLegalRoute(null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Alterna Modo Demonstração recarregando imediatamente os dados de contexto
   const toggleModoDemonstracao = () => {
@@ -488,10 +516,10 @@ export default function App() {
       const timer = setTimeout(() => {
         addToast(
           '⚠️ Alerta de Validade!',
-          `Orçamento #${maisUrgente.orcamento.numero} de ${maisUrgente.orcamento.clienteNome} ${maisUrgente.textoVencimento.toLowerCase()}. Feche agora antes que expire!`,
+          `Orçamento #${maisUrgente.orcamento.numero} de ${maisUrgente.orcamento.clienteNome} ${maisUrgente.textoVencimento.toLowerCase()}. Acompanhe a proposta antes que expire!`,
           'warning',
           {
-            label: '⚡ Fechar com IA',
+            label: '⚡ Proposta com IA',
             onClick: () => handleOpenIAForOrcamento(maisUrgente.orcamento.id),
           }
         );
@@ -499,8 +527,8 @@ export default function App() {
 
       // Notificação nativa do sistema operacional (se ativada pelo usuário)
       dispararNotificacaoNativa(
-        '⚡ FechaZap: Orçamento Próximo do Vencimento!',
-        `Orçamento #${maisUrgente.orcamento.numero} (${maisUrgente.orcamento.clienteNome}) ${maisUrgente.textoVencimento.toLowerCase()}. Clique para enviar mensagem persuasiva.`,
+        '⚡ Fecha CRM: Orçamento Próximo do Vencimento!',
+        `Orçamento #${maisUrgente.orcamento.numero} (${maisUrgente.orcamento.clienteNome}) ${maisUrgente.textoVencimento.toLowerCase()}. Clique para acompanhar a proposta.`,
         () => {
           handleOpenIAForOrcamento(maisUrgente.orcamento.id);
         }
@@ -763,6 +791,36 @@ export default function App() {
   const nextNumero = String(
     orcamentos.reduce((max, o) => Math.max(max, Number(o.numero) || 100), 100) + 1
   );
+
+  if (legalRoute === 'privacidade') {
+    return (
+      <PoliticaPrivacidadeView
+        onVoltar={() => {
+          window.history.pushState(null, '', '/');
+          setLegalRoute(null);
+        }}
+        onOpenTermos={() => {
+          window.history.pushState(null, '', '/termos');
+          setLegalRoute('termos');
+        }}
+      />
+    );
+  }
+
+  if (legalRoute === 'termos') {
+    return (
+      <TermosUsoView
+        onVoltar={() => {
+          window.history.pushState(null, '', '/');
+          setLegalRoute(null);
+        }}
+        onOpenPrivacidade={() => {
+          window.history.pushState(null, '', '/privacidade');
+          setLegalRoute('privacidade');
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-200">

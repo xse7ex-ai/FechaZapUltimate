@@ -437,7 +437,7 @@ export async function saveWhatsAppConnection(params: {
   ) {
     return {
       success: false,
-      error: 'O identificador central do FechaZap não pode ser cadastrado como conexão individual.',
+      error: 'O identificador central do Fecha CRM não pode ser cadastrado como conexão individual.',
     };
   }
 

@@ -62,7 +62,7 @@ export const NotificationBanner: React.FC<NotificationBannerProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-black text-xs bg-slate-950 text-white hover:bg-slate-900 shadow-sm transition-all active:scale-95 cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Disparar Gatilho IA</span>
+            <span>Gerar Proposta com IA</span>
           </button>
 
           <button

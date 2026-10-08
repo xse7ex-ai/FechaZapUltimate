@@ -55,7 +55,7 @@ export function openWhatsAppMessage(phone: string, text: string): void {
   window.open(url, '_blank');
 }
 
-// Disparo Automatizado de Follow-up via WhatsApp (Plano TURBO)
+// Envio de Follow-up e Acompanhamento via WhatsApp (Plano TURBO)
 // Executado exclusivamente pela Edge Function whatsapp-followup com credenciais únicas do servidor
 // Se o segredo não estiver configurado ou falhar, retorna fallbackUrl (wa.me) universal
 export async function dispararFollowUpTurbo(

@@ -108,7 +108,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                 )}
               </h4>
               <p className="text-[11px] text-slate-300">
-                Propostas que precisam de fechamento urgente
+                Propostas que requerem acompanhamento
               </p>
             </div>
           </div>

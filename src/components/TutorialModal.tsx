@@ -38,8 +38,8 @@ interface StepInfo {
 const STEPS: StepInfo[] = [
   {
     id: 1,
-    titulo: 'Bem-vindo ao FechaZap',
-    subtitulo: 'Como transformar orçamentos em vendas fechadas',
+    titulo: 'Bem-vindo ao Fecha CRM',
+    subtitulo: 'Gestão de orçamentos e comunicação ágil com o cliente',
     icone: Sparkles,
     categoria: 'Visão Geral',
   },
@@ -52,8 +52,8 @@ const STEPS: StepInfo[] = [
   },
   {
     id: 3,
-    titulo: 'Fechamento com Google Gemini IA',
-    subtitulo: 'Gatilhos de urgência, escassez e quebra de objeções',
+    titulo: 'Propostas com Google Gemini IA',
+    subtitulo: 'Modelos de comunicação, agilidade e esclarecimento de dúvidas',
     icone: Zap,
     categoria: 'Inteligência Artificial',
   },
@@ -132,7 +132,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800/80">
-                  Guia Prático FechaZap
+                  Guia Prático Fecha CRM
                 </span>
                 <span className="text-xs text-slate-400">
                   Passo {currentStep} de {STEPS.length}
@@ -193,13 +193,13 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
                 <div className="space-y-1">
                   <div className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-400">
                     <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>O Poder do FechaZap</span>
+                    <span>O Poder do Fecha CRM</span>
                   </div>
                   <h4 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    Mais de 60% dos orçamentos são perdidos pelo "vácuo" do WhatsApp.
+                    Mais de 60% dos orçamentos são perdidos pelo atraso no retorno do WhatsApp.
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-xl">
-                    O FechaZap foi desenhado para eliminar a demora na negociação. Em vez de enviar apenas um PDF frio e esperar, você usa inteligência artificial com gatilhos psicológicos para conduzir o cliente ao fechamento imediato.
+                    O Fecha CRM foi desenhado para organizar seus orçamentos e agilizar a comunicação com o cliente. Em vez de enviar apenas um PDF frio e esperar, você utiliza modelos estruturados e inteligentes para esclarecer dúvidas e obter a aprovação do orçamento.
                   </p>
                 </div>
                 <div className="w-16 h-16 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-2xl font-black shrink-0 shadow-lg shadow-emerald-600/30">
@@ -232,9 +232,9 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
                   <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-black text-sm">
                     3
                   </div>
-                  <h5 className="font-bold text-slate-900 dark:text-white text-sm">Fechamento com 1 Toque</h5>
+                  <h5 className="font-bold text-slate-900 dark:text-white text-sm">Comunicação Direta</h5>
                   <p className="text-xs text-slate-600 dark:text-slate-400 leading-normal">
-                    Dispare a mensagem pronta diretamente no WhatsApp do cliente com dados Pix e aprovação simplificada.
+                    Envie a proposta pronta diretamente no WhatsApp do cliente com dados Pix e aprovação simplificada.
                   </p>
                 </div>
               </div>
@@ -302,7 +302,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
             </div>
           )}
 
-          {/* PASSO 3: FECHAMENTO COM IA GEMINI */}
+          {/* PASSO 3: PROPOSTAS COM IA GEMINI */}
           {currentStep === 3 && (
             <div className="space-y-5 animate-in fade-in duration-200">
               <div className="space-y-1">
@@ -311,7 +311,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
                   <span>Google Gemini 3.8 Flash Integrado</span>
                 </div>
                 <h4 className="font-extrabold text-base text-slate-900 dark:text-white">
-                  Os 5 Gatilhos Mentais que Fecham Negócios no WhatsApp
+                  Modelos de Proposta que Agilizam o Atendimento no WhatsApp
                 </h4>
                 <p className="text-xs text-slate-600 dark:text-slate-400">
                   Clique no ícone de varinha mágica <strong>(✨)</strong> em qualquer orçamento para abrir o assistente:
@@ -377,7 +377,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
               {/* Simulação Visual do WhatsApp */}
               <div className="p-4 rounded-2xl bg-emerald-950/5 dark:bg-slate-850 border border-emerald-200 dark:border-slate-750 space-y-3">
                 <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider">
-                  Exemplo de mensagem gerada pelo FechaZap:
+                  Exemplo de mensagem gerada pelo Fecha CRM:
                 </span>
                 <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700/60 text-xs text-slate-800 dark:text-slate-200 space-y-2 shadow-xs font-mono leading-relaxed">
                   <p className="font-sans font-bold text-emerald-700 dark:text-emerald-400">
@@ -424,7 +424,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
                   Nunca mais perca um orçamento por esquecimento
                 </h4>
                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                  O FechaZap monitora automaticamente o relógio das suas negociações:
+                  O Fecha CRM monitora a validade das suas propostas:
                 </p>
               </div>
 
@@ -435,14 +435,14 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
                     <span>Sino de Notificações com Badge</span>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                    No topo do app, o sino alerta quantas propostas vencem nos próximos 3 dias. Clicando nele você acessa atalhos de WhatsApp e fechamento instantâneo.
+                    No topo do app, o sino alerta quantas propostas vencem nos próximos 3 dias. Clicando nele você acessa atalhos de WhatsApp e contato direto.
                   </p>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 space-y-2">
                   <div className="flex items-center gap-2 font-bold text-emerald-900 dark:text-emerald-400 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>Comemoração de Venda Fechada</span>
+                    <span>Aprovação da Proposta</span>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                     Quando o cliente aceitar, clique no botão <strong>"Aprovar"</strong>. Além dos confetes comemorativos, o faturamento é contabilizado instantaneamente no gráfico semestral.
@@ -467,7 +467,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
             <div className="space-y-5 animate-in fade-in duration-200">
               <div className="space-y-1">
                 <h4 className="font-extrabold text-base text-slate-900 dark:text-white">
-                  Deixe o FechaZap com a cara da sua empresa
+                  Deixe o Fecha CRM com a cara da sua empresa
                 </h4>
                 <p className="text-xs text-slate-600 dark:text-slate-400">
                   Antes de começar a enviar para clientes reais, personalize os dados em <strong>Configurações</strong>:

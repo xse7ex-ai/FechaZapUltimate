@@ -145,7 +145,7 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
           </h2>
 
           <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-xl mx-auto leading-relaxed mb-8">
-            Quando você utiliza o disparo de follow-up automatizado do plano <strong>TURBO</strong>, as respostas dos clientes são capturadas via Webhook oficial e centralizadas aqui. Não perca nenhuma resposta de negociação.
+            Quando você utiliza o acompanhamento de propostas via WhatsApp Cloud API do plano <strong>TURBO</strong>, as respostas dos clientes são capturadas via Webhook oficial e centralizadas aqui. Não perca nenhuma resposta de atendimento.
           </p>
 
           <div className="grid sm:grid-cols-2 gap-4 max-w-2xl mx-auto text-left mb-8">
@@ -164,7 +164,7 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
                 <span>Plano TURBO</span>
               </span>
               <p className="text-xs text-slate-700 dark:text-slate-300 leading-normal">
-                Disparo automatizado de follow-up pelo servidor com IA e caixa de entrada integrada para responder com 1 clique.
+                Comunicação estruturada pelo servidor com IA e caixa de entrada integrada para atendimento ao cliente.
               </p>
             </div>
           </div>
@@ -206,7 +206,7 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Mensagens recebidas em resposta aos orçamentos e follow-ups automáticos
+                Mensagens recebidas em resposta aos orçamentos e comunicações autorizadas
               </p>
             </div>
           </div>
@@ -232,7 +232,7 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
           <div className="flex items-center gap-2">
             <Radio className={`w-4 h-4 ${connection?.status === 'active' ? 'text-emerald-500 animate-pulse' : 'text-blue-500'}`} />
             <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px]">
-              {connection?.status === 'active' ? 'Canal Individual Ativo' : 'Canal Central FechaZap Ativo'}
+              {connection?.status === 'active' ? 'Canal Individual Ativo' : 'Canal Central Fecha CRM Ativo'}
             </span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
               connection?.status === 'active'
@@ -251,7 +251,7 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
         <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
           {connection?.status === 'active'
             ? `Respostas chegam diretamente pelo seu número comercial Meta (ID: ${connection.phoneNumberId}), com prioridade direta.`
-            : 'Respostas recebidas no número central oficial do FechaZap são roteadas automaticamente para sua conta quando a proposta for exclusiva (UNIQUE). Contatos ambíguos (AMBIGUOUS) ou não cadastrados (NOT_FOUND) são isolados pelo servidor sem vazamento entre contas.'}
+            : 'Respostas recebidas no número central oficial do Fecha CRM são roteadas automaticamente para sua conta quando a proposta for exclusiva (UNIQUE). Contatos ambíguos (AMBIGUOUS) ou não cadastrados (NOT_FOUND) são isolados pelo servidor sem vazamento entre contas.'}
         </p>
       </div>
 
@@ -313,7 +313,7 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
             {searchTerm || filterType === 'unread'
               ? 'Tente ajustar os termos de busca ou remover o filtro de mensagens não lidas.'
-              : 'Assim que um cliente responder ao orçamento ou follow-up disparado, a mensagem será roteada automaticamente para esta caixa.'}
+              : 'Assim que um cliente responder ao orçamento ou mensagem de acompanhamento, a mensagem será direcionada para esta caixa.'}
           </p>
           {!searchTerm && filterType !== 'unread' && (
             <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 max-w-lg mx-auto text-[11px] text-slate-400 dark:text-slate-500 space-y-1 text-left bg-slate-50/60 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200/50 dark:border-slate-700/50">

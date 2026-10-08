@@ -143,7 +143,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
         }
       }
     } catch (err: any) {
-      onShowToast('Erro no disparo', err?.message, 'error');
+      onShowToast('Erro no envio', err?.message, 'error');
     } finally {
       setFollowUpDispatching(false);
     }
@@ -194,13 +194,13 @@ export const ModalIA: React.FC<ModalIAProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-lg leading-tight">FechaZap IA Copiloto</h3>
+                <h3 className="font-bold text-lg leading-tight">Fecha CRM IA Copiloto</h3>
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 border border-amber-300">
                   Exclusivo TURBO
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Google Gemini • Fechamento persuasivo, análise histórica e follow-up no WhatsApp
+                Google Gemini • Propostas personalizadas, análise histórica e atendimento no WhatsApp
               </p>
             </div>
           </div>
@@ -225,7 +225,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
               </h4>
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                 Os planos <strong>Gratuito</strong> e <strong>PRO</strong> operam com foco em gestão manual sem consumo de IA no servidor.
-                O plano <strong>TURBO</strong> inclui 1.500 gerações de IA por mês, criação de propostas por voz/texto, análise histórica de preços e follow-up automático via WhatsApp.
+                O plano <strong>TURBO</strong> inclui 1.500 gerações de IA por mês, criação de propostas por voz/texto, análise histórica de preços e acompanhamento autorizado via WhatsApp.
               </p>
             </div>
 
@@ -236,7 +236,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
               </div>
               <ul className="text-slate-600 dark:text-slate-400 space-y-1 pl-5 list-disc">
                 <li>1.500 requisições de Google Gemini por mês</li>
-                <li>Follow-up automatizado de clientes pelo WhatsApp</li>
+                <li>Comunicação e acompanhamento de clientes pelo WhatsApp</li>
                 <li>Análise de preços baseada no histórico real dos seus orçamentos</li>
                 <li>Criação ultrarrápida de orçamentos por comando de voz/áudio</li>
               </ul>
@@ -307,7 +307,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                 }`}
               >
                 <Flame className="w-4 h-4 text-amber-500" />
-                Gatilhos de Fechamento
+                Modelos de Proposta
               </button>
               <button
                 onClick={() => setActiveTab('followup')}
@@ -384,7 +384,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                       className="mt-5 px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
                     >
                       <Sparkles className="w-4 h-4" />
-                      <span>{loading ? 'Gerando com Gemini...' : 'Gerar Mensagem de Fechamento'}</span>
+                      <span>{loading ? 'Gerando com Gemini...' : 'Gerar Mensagem de Atendimento'}</span>
                     </button>
                   </div>
                 </div>
@@ -394,10 +394,10 @@ export const ModalIA: React.FC<ModalIAProps> = ({
               {activeTab === 'followup' && (
                 <div className="space-y-4">
                   <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 text-xs text-purple-900 dark:text-purple-300">
-                    <p className="font-semibold mb-1">Assistente de Follow-up Inteligente FechaZap (TURBO)</p>
+                    <p className="font-semibold mb-1">Assistente de Acompanhamento Fecha CRM (TURBO)</p>
                     <p className="leading-relaxed">
-                      Envie uma mensagem educada perguntando se o cliente tem alguma dúvida para fechar o serviço.
-                      O disparo usa a conta comercial integrada com fallback garantido para o link direto do WhatsApp (wa.me).
+                      Envie uma mensagem educada perguntando se o cliente tem alguma dúvida sobre a proposta de serviço.
+                      O envio utiliza a conta comercial integrada com fallback garantido para o link direto do WhatsApp (wa.me).
                     </p>
                   </div>
 
@@ -452,7 +452,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
                       className="mt-5 px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/30 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-60 cursor-pointer ml-auto"
                     >
                       <Send className="w-4 h-4" />
-                      <span>{followUpDispatching ? 'Disparando...' : 'Disparar via WhatsApp'}</span>
+                      <span>{followUpDispatching ? 'Enviando...' : 'Enviar via WhatsApp'}</span>
                     </button>
                   </div>
 

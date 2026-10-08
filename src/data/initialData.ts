@@ -49,7 +49,7 @@ export const INITIAL_CLIENTES: Cliente[] = [
     documento: '49281729000188',
     cidade: 'Rio de Janeiro - RJ',
     endereco: 'Rua do Ouvidor, 88',
-    observacoes: 'Empresa em expansão. Fechamento rápido se houver desconto no Pix.',
+    observacoes: 'Empresa em expansão. Aprovação ágil se houver desconto no Pix.',
     dataCadastro: '2026-09-15',
     totalOrcamentos: 1,
     valorTotalGasto: 0,

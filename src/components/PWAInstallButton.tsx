@@ -39,7 +39,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 's
         <button
           type="button"
           onClick={handleInstallClick}
-          title="Instalar FechaZap no seu aparelho"
+          title="Instalar Fecha CRM no seu aparelho"
           className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-sm text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40 border border-emerald-800/60 bg-emerald-950/20 transition-all group cursor-pointer"
         >
           <div className="flex items-center gap-2.5">
@@ -56,7 +56,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 's
         <button
           type="button"
           onClick={handleInstallClick}
-          title="Instalar aplicativo FechaZap"
+          title="Instalar aplicativo Fecha CRM"
           className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-700/80 transition-all cursor-pointer shrink-0"
         >
           <Download className="w-3.5 h-3.5" />
@@ -86,7 +86,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 's
                 </div>
                 <div>
                   <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
-                    Instalar FechaZap no iOS
+                    Instalar Fecha CRM no iOS
                   </h3>
                   <p className="text-[11px] text-slate-500">Tela inicial do iPhone / iPad</p>
                 </div>
@@ -138,7 +138,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ variant = 's
                     Confirme tocando em "Adicionar"
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    O FechaZap será fixado na tela inicial como um app nativo.
+                    O Fecha CRM será fixado na tela inicial como um app nativo.
                   </p>
                 </div>
               </div>

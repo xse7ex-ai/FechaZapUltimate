@@ -194,7 +194,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
 
   const handleLogout = async () => {
     await logoutUser();
-    onShowToast('Sessão encerrada', 'Você está utilizando o FechaZap em modo local.', 'info');
+    onShowToast('Sessão encerrada', 'Você está utilizando o Fecha CRM em modo local.', 'info');
     await loadData();
     onPlanChanged?.();
   };
@@ -279,7 +279,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
               </>
             ) : (
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Os planos <strong>GRATUITO</strong> e <strong>PRO</strong> não consomem IA no servidor. Faça upgrade para o <strong>TURBO</strong> para liberar 1.500 gerações mensais e automações comerciais.
+                Os planos <strong>GRATUITO</strong> e <strong>PRO</strong> não consomem IA no servidor. Faça upgrade para o <strong>TURBO</strong> para liberar 1.500 gerações mensais e comunicação avançada com clientes.
               </p>
             )}
           </div>
@@ -441,7 +441,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
             <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
               {modoDemonstracao
                 ? 'Você está visualizando orçamentos, clientes e empresa de teste. Entrar ou sair do modo demonstração não afeta os dados reais da sua conta.'
-                : 'Deseja testar ou demonstrar o FechaZap sem exibir suas informações e clientes reais? Ative o modo demonstração com dados de exemplo. Entrar e sair não afeta os dados reais da sua conta.'}
+                : 'Deseja testar ou demonstrar o Fecha CRM sem exibir suas informações e clientes reais? Ative o modo demonstração com dados de exemplo. Entrar e sair não afeta os dados reais da sua conta.'}
             </p>
 
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -479,7 +479,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
               <span>Investimento Focado em Retorno Real</span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              No FechaZap você investe em <strong>economia de tempo</strong>, <strong>organização</strong> e <strong>inteligência comercial</strong> — sem pegadinhas ou limitações artificiais irritantes.
+              No Fecha CRM você investe em <strong>economia de tempo</strong>, <strong>organização</strong> e <strong>inteligência comercial</strong> — sem pegadinhas ou limitações artificiais irritantes.
             </p>
             <div className="flex flex-wrap gap-2 pt-1 text-[11px]">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-medium border border-emerald-500/20">
@@ -489,7 +489,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                 <FileCheck className="w-3 h-3" /> Propostas Profissionais
               </span>
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium border border-amber-500/20">
-                <Zap className="w-3 h-3" /> Fechamento Acelerado
+                <Zap className="w-3 h-3" /> Propostas Ágeis
               </span>
             </div>
           </div>
@@ -500,7 +500,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
               <div className="flex items-center gap-2">
                 <Crown className="w-4 h-4 text-amber-500" />
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
-                  Planos Disponíveis no FechaZap
+                  Planos Disponíveis no Fecha CRM
                 </span>
               </div>
               <span className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -703,7 +703,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                     </li>
                     <li className="flex items-start gap-1.5">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                      <span><strong>Follow-up WhatsApp</strong> inteligente</span>
+                      <span><strong>Acompanhamento WhatsApp</strong> inteligente</span>
                     </li>
                     <li className="flex items-start gap-1.5">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
@@ -711,7 +711,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
                     </li>
                     <li className="flex items-start gap-1.5">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                      <span>Gatilhos persuasivos de fechamento</span>
+                      <span>Comunicação personalizada e assertiva</span>
                     </li>
                   </ul>
                 </div>
@@ -775,7 +775,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
             </div>
 
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              O FechaZap adota o princípio de segurança <em>Zero Trust</em> no frontend. Qualquer tentativa do navegador de falsificar o plano é estritamente bloqueada pelo banco de dados PostgreSQL.
+              O Fecha CRM adota o princípio de segurança <em>Zero Trust</em> no frontend. Qualquer tentativa do navegador de falsificar o plano é estritamente bloqueada pelo banco de dados PostgreSQL.
             </p>
 
             <div className="flex items-center gap-3 pt-1">

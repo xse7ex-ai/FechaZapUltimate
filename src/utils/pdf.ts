@@ -260,7 +260,7 @@ export function generateOrcamentoPrintHtml(orcamento: Orcamento, empresa: Config
       <div class="footer-terms">
         ${safeTermosGarantia}
         <div style="margin-top: 8px; font-size: 11px; text-align: center; color: #94a3b8;">
-          Documento gerado pelo FechaZap 3.3.0 - Inteligência Comercial para Fechamento de Vendas
+          Documento gerado pelo Fecha CRM 3.3.0 - Gestão de Orçamentos e Atendimento ao Cliente
         </div>
       </div>
 
@@ -279,7 +279,7 @@ export function generateOrcamentoPrintHtml(orcamento: Orcamento, empresa: Config
 export function imprimirOrcamento(orcamento: Orcamento, empresa: ConfiguracaoEmpresa): boolean {
   const printWindow = window.open('', '_blank', 'width=800,height=900');
   if (!printWindow) {
-    console.warn('[FechaZap PDF] Falha ao abrir janela de impressão. Bloqueador de pop-ups ativo.');
+    console.warn('[Fecha CRM PDF] Falha ao abrir janela de impressão. Bloqueador de pop-ups ativo.');
     return false;
   }
 

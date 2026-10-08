@@ -121,11 +121,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <span>Google Gemini 3.8 Flash Integrado</span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-              Fechamento Rápido pelo WhatsApp
+              Gestão de Orçamentos e Atendimento via WhatsApp
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-xl">
               Você tem <strong>{orcPendentes.length} orçamentos em aberto</strong> somando{' '}
-              <strong>{formatCurrency(valorEmAberto)}</strong>. Use a IA Gemini para disparar gatilhos e quebrar objeções agora.
+              <strong>{formatCurrency(valorEmAberto)}</strong>. Use a IA Gemini para estruturar propostas e esclarecer dúvidas com o cliente.
             </p>
           </div>
 
@@ -143,7 +143,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Fechar com Gemini IA</span>
+              <span>Proposta com Gemini IA</span>
             </button>
           </div>
         </div>
@@ -329,7 +329,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               Nenhum orçamento cadastrado ainda
             </h4>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 mb-4 leading-relaxed">
-              O FechaZap organiza suas propostas, calcula totais instantaneamente e gera mensagens prontas para você fechar negócios com agilidade no WhatsApp.
+              O Fecha CRM organiza suas propostas, calcula totais instantaneamente e gera mensagens estruturadas para você atender clientes com agilidade no WhatsApp.
             </p>
             <button
               onClick={onOpenNovoOrcamento}

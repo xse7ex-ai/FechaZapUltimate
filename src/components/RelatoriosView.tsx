@@ -42,7 +42,7 @@ export const RelatoriosView: React.FC<RelatoriosViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-            Relatórios e Métricas de Fechamento
+            Relatórios e Métricas de Atendimento
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Acompanhe o retorno financeiro dos seus orçamentos e identifique oportunidades de melhoria.
@@ -53,7 +53,7 @@ export const RelatoriosView: React.FC<RelatoriosViewProps> = ({
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
-          <div className="text-xs font-semibold text-slate-500 mb-1">Faturamento Fechado</div>
+          <div className="text-xs font-semibold text-slate-500 mb-1">Faturamento Aprovado</div>
           <div className="text-2xl font-black text-emerald-600">
             {formatCurrency(faturamentoAprovado)}
           </div>
@@ -67,7 +67,7 @@ export const RelatoriosView: React.FC<RelatoriosViewProps> = ({
           <div className="text-2xl font-black text-slate-900">
             {formatCurrency(ticketMedio)}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">Média por cliente fechado</div>
+          <div className="text-[11px] text-slate-400 mt-1">Média por cliente atendido</div>
         </div>
 
         <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
@@ -152,7 +152,7 @@ export const RelatoriosView: React.FC<RelatoriosViewProps> = ({
               Dica de Ouro para Aumentar sua Conversão
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed mb-4">
-              Orçamentos sem resposta após 3 dias têm 75% menos chance de fechamento. Usando as mensagens personalizadas do <strong>FechaZap IA com Gemini</strong>, prestadores de serviços aumentam sua conversão em média 38%.
+              Orçamentos sem resposta após 3 dias têm 75% menos chance de aprovação. Usando as mensagens personalizadas do <strong>Fecha CRM IA com Gemini</strong>, prestadores de serviços aumentam sua conversão em média 38%.
             </p>
 
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2">

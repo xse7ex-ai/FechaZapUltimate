@@ -1,5 +1,5 @@
 // ==============================================================================
-// FechaZap - Registro e Ciclo de Vida do Service Worker
+// Fecha CRM - Registro e Ciclo de Vida do Service Worker
 // Registra o Service Worker oficial /sw.js e gerencia detecção de atualizações
 // ==============================================================================
 
@@ -21,7 +21,7 @@ export function registerServiceWorker(callbacks?: SWRegistrationCallbacks): void
     navigator.serviceWorker
       .register('/sw.js', { scope: '/' })
       .then((registration) => {
-        console.log('[FechaZap PWA] Service Worker registrado com sucesso:', registration.scope);
+        console.log('[Fecha CRM PWA] Service Worker registrado com sucesso:', registration.scope);
         callbacks?.onSuccess?.(registration);
 
         // Detecta novas versões disponíveis publicadas no servidor
@@ -33,18 +33,18 @@ export function registerServiceWorker(callbacks?: SWRegistrationCallbacks): void
             if (installingWorker.state === 'installed') {
               if (navigator.serviceWorker.controller) {
                 // Conteúdo novo disponível para atualização
-                console.log('[FechaZap PWA] Nova versão do FechaZap disponível.');
+                console.log('[Fecha CRM PWA] Nova versão do Fecha CRM disponível.');
                 callbacks?.onUpdate?.(registration);
               } else {
                 // Conteúdo inicial pré-armazenado em cache para uso offline
-                console.log('[FechaZap PWA] Conteúdo pronto para uso offline.');
+                console.log('[Fecha CRM PWA] Conteúdo pronto para uso offline.');
               }
             }
           });
         });
       })
       .catch((error) => {
-        console.warn('[FechaZap PWA] Falha no registro do Service Worker:', error);
+        console.warn('[Fecha CRM PWA] Falha no registro do Service Worker:', error);
         callbacks?.onError?.(error);
       });
 

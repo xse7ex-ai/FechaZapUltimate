@@ -78,7 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'ia' as ActiveTab,
-      label: 'FechaZap IA',
+      label: 'Fecha CRM IA',
       icon: Sparkles,
       highlight: true,
       badge: 'Gemini',
@@ -135,7 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span>Google Gemini Ativo</span>
         </div>
         <p className="text-slate-400 text-[11px] leading-relaxed">
-          Migrado com sucesso da API Claude para o modelo <strong>Gemini 3.8 Flash</strong> da Google, otimizado para respostas ultra rápidas de fechamento.
+          Migrado com sucesso da API Claude para o modelo <strong>Gemini 3.8 Flash</strong> da Google, otimizado para elaboração ágil de propostas e atendimento ao cliente.
         </p>
       </div>
 
@@ -197,7 +197,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition-colors group cursor-pointer"
         >
           <HelpCircle className="w-4 h-4 text-emerald-400 group-hover:text-emerald-300" />
-          <span>Tutorial & Guia FechaZap</span>
+          <span>Tutorial & Guia Fecha CRM</span>
         </button>
 
         <a
@@ -213,6 +213,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
             E-mail ✉️
           </span>
         </a>
+
+        {/* Links Legais Meta & LGPD */}
+        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 px-3">
+          <a
+            href="/termos"
+            onClick={(e) => {
+              e.preventDefault();
+              window.history.pushState(null, '', '/termos');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+            className="hover:text-emerald-400 transition-colors"
+          >
+            Termos de Uso
+          </a>
+          <span>•</span>
+          <a
+            href="/privacidade"
+            onClick={(e) => {
+              e.preventDefault();
+              window.history.pushState(null, '', '/privacidade');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+            className="hover:text-emerald-400 transition-colors"
+          >
+            Privacidade
+          </a>
+        </div>
       </div>
     </aside>
   );

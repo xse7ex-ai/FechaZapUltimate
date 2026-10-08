@@ -66,6 +66,7 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
   // Autosave Draft Key
   const DRAFT_KEY = 'fechazap_draft_orcamento_v1';
   const [hasDraftRestored, setHasDraftRestored] = useState<boolean>(false);
+  const [optInConsent, setOptInConsent] = useState<boolean>(false);
 
   useEffect(() => {
     if (orcamentoToEdit) {
@@ -80,7 +81,9 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
       setObservacoes(orcamentoToEdit.observacoes || '');
       setTermosGarantia(orcamentoToEdit.termosGarantia || '');
       setHasDraftRestored(false);
+      setOptInConsent(true);
     } else if (isOpen) {
+      setOptInConsent(false);
       // Verifica se há rascunho salvo anteriormente
       try {
         const rawDraft = localStorage.getItem(DRAFT_KEY);
@@ -249,6 +252,15 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!optInConsent) {
+      onShowToast?.(
+        'Consentimento obrigatório',
+        'Confirme que o cliente autorizou o recebimento deste orçamento e de atualizações via WhatsApp.',
+        'error'
+      );
+      return;
+    }
+
     let clienteFinalId = selectedClienteId;
     let clienteFinalNome = '';
     let clienteFinalTelefone = '';
@@ -269,6 +281,9 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
         dataCadastro: new Date().toISOString().split('T')[0],
         totalOrcamentos: 1,
         valorTotalGasto: 0,
+        whatsappOptIn: optInConsent,
+        whatsappOptInAt: new Date().toISOString(),
+        whatsappOptInSource: 'orcamento_inline_optin',
       };
       clienteFinalId = newId;
       clienteFinalNome = novoClienteCriado.nome;
@@ -842,6 +857,22 @@ export const ModalNovoOrcamento: React.FC<ModalNovoOrcamentoProps> = ({
                   {formatCurrency(valorTotal)}
                 </span>
               </div>
+            </div>
+
+            {/* Checkbox de Consentimento WhatsApp (Opt-in) Obrigatório */}
+            <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/70 rounded-xl p-3.5">
+              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  required
+                  checked={optInConsent}
+                  onChange={(e) => setOptInConsent(e.target.checked)}
+                  className="mt-0.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500 cursor-pointer h-4 w-4 shrink-0"
+                />
+                <span className="text-xs text-slate-800 dark:text-slate-200 leading-snug">
+                  Confirmo que o cliente autorizou o recebimento deste orçamento e de atualizações via WhatsApp.
+                </span>
+              </label>
             </div>
           </div>
 

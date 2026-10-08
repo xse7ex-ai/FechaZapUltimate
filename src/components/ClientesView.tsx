@@ -48,6 +48,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   const [cidade, setCidade] = useState<string>('');
   const [endereco, setEndereco] = useState<string>('');
   const [observacoes, setObservacoes] = useState<string>('');
+  const [optInConsent, setOptInConsent] = useState<boolean>(false);
 
   const openNewModal = () => {
     setEditingCliente(null);
@@ -58,6 +59,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     setCidade('');
     setEndereco('');
     setObservacoes('');
+    setOptInConsent(false);
     setIsModalOpen(true);
   };
 
@@ -70,6 +72,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     setCidade(c.cidade || '');
     setEndereco(c.endereco || '');
     setObservacoes(c.observacoes || '');
+    setOptInConsent(c.whatsappOptIn ?? false);
     setIsModalOpen(true);
   };
 
@@ -77,6 +80,15 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     e.preventDefault();
     if (!nome.trim() || !telefone.trim()) {
       onShowToast('Campos obrigatórios', 'Nome e Telefone são obrigatórios para cadastrar o cliente.', 'error');
+      return;
+    }
+
+    if (!editingCliente && !optInConsent) {
+      onShowToast(
+        'Consentimento obrigatório',
+        'Confirme que o cliente autorizou o recebimento deste orçamento e de atualizações via WhatsApp.',
+        'error'
+      );
       return;
     }
 
@@ -94,10 +106,10 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
         : new Date().toISOString().split('T')[0],
       totalOrcamentos: editingCliente?.totalOrcamentos || 0,
       valorTotalGasto: editingCliente?.valorTotalGasto || 0,
-      whatsappOptIn: editingCliente?.whatsappOptIn !== undefined ? editingCliente.whatsappOptIn : true,
-      whatsappOptInAt: editingCliente?.whatsappOptInAt || new Date().toISOString(),
-      whatsappOptInSource: editingCliente?.whatsappOptInSource || 'cadastro',
-      whatsappOptOutAt: editingCliente?.whatsappOptOutAt,
+      whatsappOptIn: optInConsent,
+      whatsappOptInAt: optInConsent ? (editingCliente?.whatsappOptInAt || new Date().toISOString()) : undefined,
+      whatsappOptInSource: 'cadastro_manual_optin',
+      whatsappOptOutAt: !optInConsent ? new Date().toISOString() : undefined,
       lastInboundAt: editingCliente?.lastInboundAt,
     };
 
@@ -543,6 +555,22 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                   onChange={(e) => setObservacoes(e.target.value)}
                   className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-emerald-500"
                 />
+              </div>
+
+              {/* Checkbox de Consentimento WhatsApp (Opt-in) Obrigatório */}
+              <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/70 rounded-xl p-3.5">
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    required={!editingCliente}
+                    checked={optInConsent}
+                    onChange={(e) => setOptInConsent(e.target.checked)}
+                    className="mt-0.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500 cursor-pointer h-4 w-4 shrink-0"
+                  />
+                  <span className="text-xs text-slate-800 dark:text-slate-200 leading-snug">
+                    Confirmo que o cliente autorizou o recebimento deste orçamento e de atualizações via WhatsApp.
+                  </span>
+                </label>
               </div>
 
               <div className="flex items-center justify-end gap-2.5 pt-3">

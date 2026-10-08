@@ -666,7 +666,7 @@ describe('FechaZap - Suíte de Endurecimento Técnico (Fase 7/9)', () => {
 
       const html = generateOrcamentoPrintHtml(orc, dummyEmpresa);
 
-      expect(html).toContain('FechaZap 3.3.0');
+      expect(html).toContain('Fecha CRM 3.3.0');
       expect(html).toContain('Tech Soluções');
       expect(html).toContain('Pintura Residencial');
       expect(html.replace(/\u00a0/g, ' ')).toContain('R$ 900,00');
