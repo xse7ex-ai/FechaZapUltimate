@@ -8,12 +8,8 @@
 //   - metadata { plano } configurado na sessão e no subscription_data para garantia no webhook.
 //   - Nunca expõe STRIPE_SECRET_KEY.
 
+import { getCorsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 function resolveAppOrigin(req: Request): string {
   const reqOrigin = req.headers.get('origin') || req.headers.get('Origin');
@@ -26,15 +22,17 @@ function resolveAppOrigin(req: Request): string {
 }
 
 Deno.serve(async (req) => {
+  const currentCorsHeaders = getCorsHeaders(req);
+
   // CORS Preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: currentCorsHeaders });
   }
 
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ success: false, error: 'Método não permitido.' }),
-      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 405, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
@@ -51,7 +49,7 @@ Deno.serve(async (req) => {
         success: false,
         error: 'Serviço de pagamentos temporariamente indisponível (chave Stripe ausente).',
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
@@ -61,7 +59,7 @@ Deno.serve(async (req) => {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return new Response(
         JSON.stringify({ success: false, error: 'Não autorizado. JWT ausente ou inválido.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -69,7 +67,7 @@ Deno.serve(async (req) => {
     if (!token || token.startsWith('local-')) {
       return new Response(
         JSON.stringify({ success: false, error: 'Sessão inválida. Faça login com sua conta.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -79,7 +77,7 @@ Deno.serve(async (req) => {
     if (authError || !authData?.user) {
       return new Response(
         JSON.stringify({ success: false, error: 'Token expirado ou não autorizado.' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -95,7 +93,7 @@ Deno.serve(async (req) => {
           success: false,
           error: 'Plano inválido. Valores aceitos: "PRO" ou "TURBO".',
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -107,7 +105,7 @@ Deno.serve(async (req) => {
           success: false,
           error: `Identificador de preço para o plano ${plano} não configurado no servidor.`,
         }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 500, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -127,7 +125,7 @@ Deno.serve(async (req) => {
           success: false,
           error: "Você já tem uma assinatura ativa. Use 'Gerenciar assinatura' para trocar de plano.",
         }),
-        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 409, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -173,7 +171,7 @@ Deno.serve(async (req) => {
             success: false,
             error: custErr?.error?.message || 'Falha ao registrar cliente no Stripe.',
           }),
-          { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 502, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -211,7 +209,7 @@ Deno.serve(async (req) => {
           success: false,
           error: sessionErr?.error?.message || 'Falha ao gerar sessão de checkout no Stripe.',
         }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 502, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -223,13 +221,13 @@ Deno.serve(async (req) => {
         url: sessionData.url,
         sessionId: sessionData.id,
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err: any) {
     console.error('[create-checkout-session] Exceção:', err);
     return new Response(
       JSON.stringify({ success: false, error: err?.message || 'Erro interno do servidor.' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...currentCorsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
