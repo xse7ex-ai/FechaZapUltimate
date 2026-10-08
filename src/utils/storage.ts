@@ -50,7 +50,7 @@ export function setStorageItem<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (err) {
-    console.warn(`[Fecha CRM Storage] Falha ao gravar chave "${key}":`, err);
+    console.warn(`[CLOSI Storage] Falha ao gravar chave "${key}":`, err);
   }
 }
 
@@ -297,6 +297,6 @@ export function resetDemoData(): void {
     removeStorageItem(getUserStorageKey(null, 'mensagens'));
     removeStorageItem(getUserStorageKey(null, 'sync_queue'));
   } catch (err) {
-    console.warn('[Fecha CRM Storage] Falha ao resetar dados de demonstração:', err);
+    console.warn('[CLOSI Storage] Falha ao resetar dados de demonstração:', err);
   }
 }

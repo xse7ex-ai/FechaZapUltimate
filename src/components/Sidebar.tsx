@@ -78,7 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'ia' as ActiveTab,
-      label: 'Fecha CRM IA',
+      label: 'CLOSI IA',
       icon: Sparkles,
       highlight: true,
       badge: 'Gemini',
@@ -197,7 +197,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition-colors group cursor-pointer"
         >
           <HelpCircle className="w-4 h-4 text-emerald-400 group-hover:text-emerald-300" />
-          <span>Tutorial & Guia Fecha CRM</span>
+          <span>Tutorial & Guia CLOSI</span>
         </button>
 
         <a

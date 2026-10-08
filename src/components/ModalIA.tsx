@@ -194,7 +194,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-lg leading-tight">Fecha CRM IA Copiloto</h3>
+                <h3 className="font-bold text-lg leading-tight">CLOSI IA Copiloto</h3>
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 border border-amber-300">
                   Exclusivo TURBO
                 </span>
@@ -394,7 +394,7 @@ export const ModalIA: React.FC<ModalIAProps> = ({
               {activeTab === 'followup' && (
                 <div className="space-y-4">
                   <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 text-xs text-purple-900 dark:text-purple-300">
-                    <p className="font-semibold mb-1">Assistente de Acompanhamento Fecha CRM (TURBO)</p>
+                    <p className="font-semibold mb-1">Assistente de Acompanhamento CLOSI (TURBO)</p>
                     <p className="leading-relaxed">
                       Envie uma mensagem educada perguntando se o cliente tem alguma dúvida sobre a proposta de serviço.
                       O envio utiliza a conta comercial integrada com fallback garantido para o link direto do WhatsApp (wa.me).

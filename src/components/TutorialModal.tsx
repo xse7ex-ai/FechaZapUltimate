@@ -38,7 +38,7 @@ interface StepInfo {
 const STEPS: StepInfo[] = [
   {
     id: 1,
-    titulo: 'Bem-vindo ao Fecha CRM',
+    titulo: 'Bem-vindo ao CLOSI',
     subtitulo: 'Gestão de orçamentos e comunicação ágil com o cliente',
     icone: Sparkles,
     categoria: 'Visão Geral',
@@ -132,7 +132,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800/80">
-                  Guia Prático Fecha CRM
+                  Guia Prático CLOSI
                 </span>
                 <span className="text-xs text-slate-400">
                   Passo {currentStep} de {STEPS.length}
@@ -193,13 +193,13 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
                 <div className="space-y-1">
                   <div className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-400">
                     <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>O Poder do Fecha CRM</span>
+                    <span>O Poder do CLOSI</span>
                   </div>
                   <h4 className="text-base font-extrabold text-slate-900 dark:text-white">
                     Mais de 60% dos orçamentos são perdidos pelo atraso no retorno do WhatsApp.
                   </h4>
                   <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-xl">
-                    O Fecha CRM foi desenhado para organizar seus orçamentos e agilizar a comunicação com o cliente. Em vez de enviar apenas um PDF frio e esperar, você utiliza modelos estruturados e inteligentes para esclarecer dúvidas e obter a aprovação do orçamento.
+                    O CLOSI foi desenhado para organizar seus orçamentos e agilizar a comunicação com o cliente. Em vez de enviar apenas um PDF frio e esperar, você utiliza modelos estruturados e inteligentes para esclarecer dúvidas e obter a aprovação do orçamento.
                   </p>
                 </div>
                 <div className="w-16 h-16 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-2xl font-black shrink-0 shadow-lg shadow-emerald-600/30">
@@ -375,9 +375,9 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
               </div>
 
               {/* Simulação Visual do WhatsApp */}
-              <div className="p-4 rounded-2xl bg-emerald-950/5 dark:bg-slate-850 border border-emerald-200 dark:border-slate-750 space-y-3">
+              <div className="p-4 rounded-2xl bg-emerald-950/5 dark:bg-slate-850 border border-emerald-200 dark:border-slate-755 space-y-3">
                 <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider">
-                  Exemplo de mensagem gerada pelo Fecha CRM:
+                  Exemplo de mensagem gerada pelo CLOSI:
                 </span>
                 <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700/60 text-xs text-slate-800 dark:text-slate-200 space-y-2 shadow-xs font-mono leading-relaxed">
                   <p className="font-sans font-bold text-emerald-700 dark:text-emerald-400">
@@ -424,7 +424,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
                   Nunca mais perca um orçamento por esquecimento
                 </h4>
                 <p className="text-xs text-slate-600 dark:text-slate-400">
-                  O Fecha CRM monitora a validade das suas propostas:
+                  O CLOSI monitora a validade das suas propostas:
                 </p>
               </div>
 
@@ -467,7 +467,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
             <div className="space-y-5 animate-in fade-in duration-200">
               <div className="space-y-1">
                 <h4 className="font-extrabold text-base text-slate-900 dark:text-white">
-                  Deixe o Fecha CRM com a cara da sua empresa
+                  Deixe o CLOSI com a cara da sua empresa
                 </h4>
                 <p className="text-xs text-slate-600 dark:text-slate-400">
                   Antes de começar a enviar para clientes reais, personalize os dados em <strong>Configurações</strong>:

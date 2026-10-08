@@ -19,7 +19,7 @@
 
   <!-- Centered safe-zone group scaled by ~0.76 (padding ~12% on all sides) -->
   <g transform="translate(61, 61) scale(0.76)">
-    <!-- Central Lightning Bolt (Fecha CRM ⚡) -->
+    <!-- Central Lightning Bolt (CLOSI ⚡) -->
     <path
       d="M285 64 L160 272 L252 272 L215 448 L356 236 L264 236 Z"
       fill="url(#boltGradMask)"

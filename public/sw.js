@@ -1,13 +1,13 @@
 // ==============================================================================
-// Fecha CRM - Progressive Web App (PWA) Service Worker
-// Versão do Cache do Shell: fechacrm-shell-v1
+// CLOSI - Progressive Web App (PWA) Service Worker
+// Versão do Cache do Shell: closi-shell-v1
 // Estratégia:
 //   - HTML de Navegação: Network-First com fallback para o Shell offline
 //   - Assets Estáticos (JS/CSS/Imagens/Ícones): Stale-While-Revalidate
 //   - APIs e Supabase: EXCLUSIVAMENTE Rede (ZERO cache de dados privados ou tokens)
 // ==============================================================================
 
-const CACHE_NAME = 'fechacrm-shell-v1';
+const CACHE_NAME = 'closi-shell-v1';
 
 // Recursos mínimos necessários para carregar o shell da aplicação offline
 const PRECACHE_ASSETS = [
@@ -26,9 +26,9 @@ const PRECACHE_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Fecha CRM SW] Pré-cache do shell da aplicação iniciado.');
+      console.log('[CLOSI SW] Pré-cache do shell da aplicação iniciado.');
       return cache.addAll(PRECACHE_ASSETS).catch((err) => {
-        console.warn('[Fecha CRM SW] Aviso no pré-cache inicial (ignorado em dev):', err);
+        console.warn('[CLOSI SW] Aviso no pré-cache inicial (ignorado em dev):', err);
       });
     }).then(() => self.skipWaiting())
   );
@@ -42,7 +42,7 @@ self.addEventListener('activate', (event) => {
         cacheNames
           .filter((name) => name !== CACHE_NAME)
           .map((name) => {
-            console.log('[Fecha CRM SW] Removendo cache obsoleto:', name);
+            console.log('[CLOSI SW] Removendo cache obsoleto:', name);
             return caches.delete(name);
           })
       );

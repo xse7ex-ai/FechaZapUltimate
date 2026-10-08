@@ -329,7 +329,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               Nenhum orçamento cadastrado ainda
             </h4>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 mb-4 leading-relaxed">
-              O Fecha CRM organiza suas propostas, calcula totais instantaneamente e gera mensagens estruturadas para você atender clientes com agilidade no WhatsApp.
+              O CLOSI organiza suas propostas, calcula totais instantaneamente e gera mensagens estruturadas para você atender clientes com agilidade no WhatsApp.
             </p>
             <button
               onClick={onOpenNovoOrcamento}

@@ -1,5 +1,5 @@
 // ==============================================================================
-// Fecha CRM • Módulo de Observabilidade e Logs Estruturados (Fase 7/9)
+// CLOSI • Módulo de Observabilidade e Logs Estruturados (Fase 7/9)
 // ==============================================================================
 // Categorias Suportadas:
 //   - auth, gemini, quota, whatsapp, webhook, sync, billing

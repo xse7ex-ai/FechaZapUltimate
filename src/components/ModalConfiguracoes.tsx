@@ -178,7 +178,7 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-lg">Configurações do Fecha CRM</h3>
+              <h3 className="font-bold text-lg">Configurações do CLOSI</h3>
               <p className="text-xs text-slate-400 mt-0.5">
                 Dados da empresa, aparência/tema e motor de IA Google Gemini.
               </p>
@@ -275,7 +275,7 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
             </div>
 
             <p className="text-xs text-emerald-900 dark:text-slate-300 leading-relaxed">
-              O Fecha CRM está integrado diretamente à API do <strong>Google Gemini</strong> usando o modelo <code>gemini-3.8-flash</code> com fallback automático e contingência resiliente.
+              O CLOSI está integrado diretamente à API do <strong>Google Gemini</strong> usando o modelo <code>gemini-3.8-flash</code> com fallback automático e contingência resiliente.
             </p>
 
             <div className="bg-white dark:bg-slate-900/90 p-3 rounded-lg border border-emerald-200/80 dark:border-slate-700 space-y-2 text-xs">
@@ -660,7 +660,7 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
           {onOpenTutorial && (
             <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
               <div>
-                <span className="font-bold text-xs text-emerald-950 dark:text-emerald-300 block">Guia & Tutorial Fecha CRM</span>
+                <span className="font-bold text-xs text-emerald-950 dark:text-emerald-300 block">Guia & Tutorial CLOSI</span>
                 <span className="text-[11px] text-emerald-800 dark:text-slate-400">Revise o passo a passo completo de atendimento e propostas pelo WhatsApp.</span>
               </div>
               <button

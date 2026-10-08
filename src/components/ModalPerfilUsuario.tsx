@@ -194,7 +194,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
 
   const handleLogout = async () => {
     await logoutUser();
-    onShowToast('Sessão encerrada', 'Você está utilizando o Fecha CRM em modo local.', 'info');
+    onShowToast('Sessão encerrada', 'Você está utilizando o CLOSI em modo local.', 'info');
     await loadData();
     onPlanChanged?.();
   };
@@ -441,7 +441,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
             <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
               {modoDemonstracao
                 ? 'Você está visualizando orçamentos, clientes e empresa de teste. Entrar ou sair do modo demonstração não afeta os dados reais da sua conta.'
-                : 'Deseja testar ou demonstrar o Fecha CRM sem exibir suas informações e clientes reais? Ative o modo demonstração com dados de exemplo. Entrar e sair não afeta os dados reais da sua conta.'}
+                : 'Deseja testar ou demonstrar o CLOSI sem exibir suas informações e clientes reais? Ative o modo demonstração com dados de exemplo. Entrar e sair não afeta os dados reais da sua conta.'}
             </p>
 
             <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -479,7 +479,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
               <span>Investimento Focado em Retorno Real</span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              No Fecha CRM você investe em <strong>economia de tempo</strong>, <strong>organização</strong> e <strong>inteligência comercial</strong> — sem pegadinhas ou limitações artificiais irritantes.
+              No CLOSI você investe em <strong>economia de tempo</strong>, <strong>organização</strong> e <strong>inteligência comercial</strong> — sem pegadinhas ou limitações artificiais irritantes.
             </p>
             <div className="flex flex-wrap gap-2 pt-1 text-[11px]">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-medium border border-emerald-500/20">
@@ -500,7 +500,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
               <div className="flex items-center gap-2">
                 <Crown className="w-4 h-4 text-amber-500" />
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
-                  Planos Disponíveis no Fecha CRM
+                  Planos Disponíveis no CLOSI
                 </span>
               </div>
               <span className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -775,7 +775,7 @@ export const ModalPerfilUsuario: React.FC<ModalPerfilUsuarioProps> = ({
             </div>
 
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              O Fecha CRM adota o princípio de segurança <em>Zero Trust</em> no frontend. Qualquer tentativa do navegador de falsificar o plano é estritamente bloqueada pelo banco de dados PostgreSQL.
+              O CLOSI adota o princípio de segurança <em>Zero Trust</em> no frontend. Qualquer tentativa do navegador de falsificar o plano é estritamente bloqueada pelo banco de dados PostgreSQL.
             </p>
 
             <div className="flex items-center gap-3 pt-1">

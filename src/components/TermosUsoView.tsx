@@ -51,7 +51,7 @@ export const TermosUsoView: React.FC<TermosUsoViewProps> = ({
                 Termos de Uso
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                Fecha CRM • Regras de Uso da Plataforma e Políticas Comerciais
+                CLOSI • Regras de Uso da Plataforma e Políticas Comerciais
               </p>
             </div>
           </div>
@@ -69,7 +69,7 @@ export const TermosUsoView: React.FC<TermosUsoViewProps> = ({
               1. Aceitação dos Termos
             </h2>
             <p>
-              Ao criar uma conta, acessar ou utilizar o <strong>Fecha CRM</strong>, você declara estar de acordo com estes Termos de Uso e com a nossa Política de Privacidade. Caso não concorde com qualquer disposição aqui estabelecida, solicitamos que não utilize a plataforma.
+              Ao criar uma conta, acessar ou utilizar o <strong>CLOSI</strong>, você declara estar de acordo com estes Termos de Uso e com a nossa Política de Privacidade. Caso não concorde com qualquer disposição aqui estabelecida, solicitamos que não utilize a plataforma.
             </p>
           </section>
 
@@ -79,7 +79,7 @@ export const TermosUsoView: React.FC<TermosUsoViewProps> = ({
               2. Objeto e Descrição dos Serviços
             </h2>
             <p>
-              O Fecha CRM é uma plataforma de produtividade e CRM destinada a autônomos e empresas para a criação, organização e gestão de orçamentos e comunicação de suporte com clientes via WhatsApp. Os planos disponíveis (GRATUITO, PRO e TURBO) possuem recursos e cotas específicos descritos na plataforma.
+              O CLOSI é uma plataforma de produtividade e CRM destinada a autônomos e empresas para a criação, organização e gestão de orçamentos e comunicação de suporte com clientes via WhatsApp. Os planos disponíveis (GRATUITO, PRO e TURBO) possuem recursos e cotas específicos descritos na plataforma.
             </p>
           </section>
 
@@ -89,14 +89,14 @@ export const TermosUsoView: React.FC<TermosUsoViewProps> = ({
               3. Regras de Uso e Conformidade com a Meta (WhatsApp Cloud API)
             </h2>
             <p className="text-xs sm:text-sm text-amber-950 dark:text-amber-200">
-              O usuário do Fecha CRM compromete-se a utilizar a plataforma estritamente dentro das diretrizes e políticas da Meta Platforms, Inc. e da legislação vigente:
+              O usuário do CLOSI compromete-se a utilizar a plataforma estritamente dentro das diretrizes e políticas da Meta Platforms, Inc. e da legislação vigente:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-xs text-slate-700 dark:text-slate-300">
               <li>
                 <strong>Consentimento Obrigatório:</strong> O usuário é o único e exclusivo responsável por coletar e comprovar o consentimento prévio (opt-in) do cliente antes de enviar qualquer mensagem comercial pelo WhatsApp.
               </li>
               <li>
-                <strong>Vedação Expressa de Spam e Mensagens em Massa:</strong> É terminantemente proibido utilizar o Fecha CRM para envio de spam, correntes, comunicações não solicitadas, mensagens automatizadas em massa ou abordagem de listas frias.
+                <strong>Vedação Expressa de Spam e Mensagens em Massa:</strong> É terminantemente proibido utilizar o CLOSI para envio de spam, correntes, comunicações não solicitadas, mensagens automatizadas em massa ou abordagem de listas frias.
               </li>
               <li>
                 <strong>Respeito ao Opt-Out:</strong> Caso o cliente final solicite a interrupção das comunicações (ex: respondendo PARAR ou SAIR), o usuário deve cessar imediatamente o envio de qualquer mensagem subsequente.
@@ -113,7 +113,7 @@ export const TermosUsoView: React.FC<TermosUsoViewProps> = ({
               4. Responsabilidade pelos Dados Cadastrados
             </h2>
             <p>
-              Os dados de clientes inseridos na plataforma (nome, telefone e escopo de propostas) são de responsabilidade do profissional contratante. O Fecha CRM atua exclusivamente como operador das ferramentas de gestão e envio, cabendo ao usuário zelar pela veracidade e pela base legal da coleta desses dados conforme a LGPD.
+              Os dados de clientes inseridos na plataforma (nome, telefone e escopo de propostas) são de responsabilidade do profissional contratante. O CLOSI atua exclusivamente como operador das ferramentas de gestão e envio, cabendo ao usuário zelar pela veracidade e pela base legal da coleta desses dados conforme a LGPD.
             </p>
           </section>
 
@@ -145,7 +145,7 @@ export const TermosUsoView: React.FC<TermosUsoViewProps> = ({
 
         {/* Footer */}
         <div className="text-center pt-4 pb-8 text-xs text-slate-500 dark:text-slate-400">
-          <p>© 2026 Fecha CRM — Todos os direitos reservados.</p>
+          <p>© 2026 CLOSI — Todos os direitos reservados.</p>
         </div>
 
       </div>

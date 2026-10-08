@@ -51,7 +51,7 @@ export const PoliticaPrivacidadeView: React.FC<PoliticaPrivacidadeViewProps> = (
                 Política de Privacidade
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                Fecha CRM • Gestão de Orçamentos e Atendimento ao Cliente
+                CLOSI • Gestão de Orçamentos e Atendimento ao Cliente
               </p>
             </div>
           </div>
@@ -103,7 +103,7 @@ export const PoliticaPrivacidadeView: React.FC<PoliticaPrivacidadeViewProps> = (
               1. Quem Somos e Objetivo da Plataforma
             </h2>
             <p>
-              O <strong>Fecha CRM</strong> é uma solução tecnológica voltada para profissionais autônomos, prestadores de serviços e pequenas empresas para a gestão de orçamentos, organização de clientes e comunicação comercial transparente via WhatsApp.
+              O <strong>CLOSI</strong> é uma solução tecnológica voltada para profissionais autônomos, prestadores de serviços e pequenas empresas para a gestão de orçamentos, organização de clientes e comunicação comercial transparente via WhatsApp.
             </p>
             <p>
               Nossa missão é fornecer ferramentas de CRM eficientes que permitam aos prestadores organizar propostas solicitadas pelos seus próprios clientes de maneira ética, rápida e em total conformidade com as diretrizes da Meta e a legislação brasileira de proteção de dados.
@@ -117,7 +117,7 @@ export const PoliticaPrivacidadeView: React.FC<PoliticaPrivacidadeViewProps> = (
               2. Integração com a WhatsApp Cloud API (Meta Platforms, Inc.)
             </h2>
             <p>
-              O Fecha CRM utiliza a <strong>WhatsApp Cloud API oficial da Meta Platforms, Inc.</strong> para a comunicação de propostas e atendimento ao cliente:
+              O CLOSI utiliza a <strong>WhatsApp Cloud API oficial da Meta Platforms, Inc.</strong> para a comunicação de propostas e atendimento ao cliente:
             </p>
             <ul className="list-disc pl-5 space-y-1.5 text-xs sm:text-sm">
               <li>
@@ -161,7 +161,7 @@ export const PoliticaPrivacidadeView: React.FC<PoliticaPrivacidadeViewProps> = (
               4. Não Comercialização e Não Compartilhamento para Fins de Marketing
             </h2>
             <p className="text-xs sm:text-sm text-emerald-950 dark:text-emerald-200 font-medium">
-              O Fecha CRM <strong>NUNCA comercializa, vende, aluga ou cede dados pessoais</strong> de usuários ou de seus clientes finais para terceiros, empresas de publicidade ou corretores de dados.
+              O CLOSI <strong>NUNCA comercializa, vende, aluga ou cede dados pessoais</strong> de usuários ou de seus clientes finais para terceiros, empresas de publicidade ou corretores de dados.
             </p>
             <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300">
               O compartilhamento de dados ocorre exclusivamente com provedores de infraestrutura estritamente indispensáveis para o funcionamento técnico do serviço:
@@ -200,7 +200,7 @@ export const PoliticaPrivacidadeView: React.FC<PoliticaPrivacidadeViewProps> = (
               6. Direitos do Titular de Dados (LGPD)
             </h2>
             <p>
-              Nos termos do artigo 18 da Lei Geral de Proteção de Dados (LGPD), o titular de dados pessoais pode exercer, a qualquer tempo, os seguintes direitos perante o Fecha CRM:
+              Nos termos do artigo 18 da Lei Geral de Proteção de Dados (LGPD), o titular de dados pessoais pode exercer, a qualquer tempo, os seguintes direitos perante o CLOSI:
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
               <div className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
@@ -264,7 +264,7 @@ export const PoliticaPrivacidadeView: React.FC<PoliticaPrivacidadeViewProps> = (
 
         {/* Footer */}
         <div className="text-center pt-4 pb-8 text-xs text-slate-500 dark:text-slate-400">
-          <p>© 2026 Fecha CRM — Todos os direitos reservados.</p>
+          <p>© 2026 CLOSI — Todos os direitos reservados.</p>
           <p className="mt-1">
             Plataforma em conformidade com as Políticas Comerciais da Meta e da WhatsApp Cloud API.
           </p>

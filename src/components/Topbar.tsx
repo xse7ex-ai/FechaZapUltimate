@@ -43,8 +43,8 @@ export const Topbar: React.FC<TopbarProps> = ({
             ⚡
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight leading-none select-none">
-              Fecha<span className="text-emerald-600 dark:text-emerald-400"> CRM</span>
+            <span className="font-black text-base sm:text-lg text-slate-900 dark:text-white tracking-wider leading-none select-none">
+              CLOS<span className="text-emerald-600 dark:text-emerald-400">I</span>
             </span>
             {empresa.nomeFantasia && (
               <span className="hidden sm:inline-block text-[11px] font-medium text-slate-400 dark:text-slate-500 truncate max-w-[180px] leading-tight mt-0.5">

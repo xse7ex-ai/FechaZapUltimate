@@ -232,7 +232,7 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
           <div className="flex items-center gap-2">
             <Radio className={`w-4 h-4 ${connection?.status === 'active' ? 'text-emerald-500 animate-pulse' : 'text-blue-500'}`} />
             <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px]">
-              {connection?.status === 'active' ? 'Canal Individual Ativo' : 'Canal Central Fecha CRM Ativo'}
+              {connection?.status === 'active' ? 'Canal Individual Ativo' : 'Canal Central CLOSI Ativo'}
             </span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
               connection?.status === 'active'
@@ -251,7 +251,7 @@ export const MensagensView: React.FC<MensagensViewProps> = ({
         <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
           {connection?.status === 'active'
             ? `Respostas chegam diretamente pelo seu número comercial Meta (ID: ${connection.phoneNumberId}), com prioridade direta.`
-            : 'Respostas recebidas no número central oficial do Fecha CRM são roteadas automaticamente para sua conta quando a proposta for exclusiva (UNIQUE). Contatos ambíguos (AMBIGUOUS) ou não cadastrados (NOT_FOUND) são isolados pelo servidor sem vazamento entre contas.'}
+            : 'Respostas recebidas no número central oficial do CLOSI são roteadas automaticamente para sua conta quando a proposta for exclusiva (UNIQUE). Contatos ambíguos (AMBIGUOUS) ou não cadastrados (NOT_FOUND) são isolados pelo servidor sem vazamento entre contas.'}
         </p>
       </div>
 

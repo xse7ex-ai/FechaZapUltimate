@@ -152,7 +152,7 @@ export const RelatoriosView: React.FC<RelatoriosViewProps> = ({
               Dica de Ouro para Aumentar sua Conversão
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed mb-4">
-              Orçamentos sem resposta após 3 dias têm 75% menos chance de aprovação. Usando as mensagens personalizadas do <strong>Fecha CRM IA com Gemini</strong>, prestadores de serviços aumentam sua conversão em média 38%.
+              Orçamentos sem resposta após 3 dias têm 75% menos chance de aprovação. Usando as mensagens personalizadas do <strong>CLOSI IA com Gemini</strong>, prestadores de serviços aumentam sua conversão em média 38%.
             </p>
 
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2">

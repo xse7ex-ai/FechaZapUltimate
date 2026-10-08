@@ -527,7 +527,7 @@ export default function App() {
 
       // Notificação nativa do sistema operacional (se ativada pelo usuário)
       dispararNotificacaoNativa(
-        '⚡ Fecha CRM: Orçamento Próximo do Vencimento!',
+        '⚡ CLOSI: Orçamento Próximo do Vencimento!',
         `Orçamento #${maisUrgente.orcamento.numero} (${maisUrgente.orcamento.clienteNome}) ${maisUrgente.textoVencimento.toLowerCase()}. Clique para acompanhar a proposta.`,
         () => {
           handleOpenIAForOrcamento(maisUrgente.orcamento.id);
