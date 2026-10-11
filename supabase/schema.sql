@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_connections (
   phone_number_id TEXT NOT NULL,
   display_phone_number TEXT,
   access_token_encrypted TEXT,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'revoked')),
+  status TEXT NOT NULL DEFAULT 'pending_verification' CHECK (status IN ('active', 'inactive', 'revoked', 'pending_verification')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -140,9 +140,9 @@ CREATE INDEX IF NOT EXISTS idx_ai_usage_user_mes ON public.ai_usage(user_id, mes
 CREATE INDEX IF NOT EXISTS idx_configuracoes_user_id ON public.configuracoes(user_id);
 CREATE INDEX IF NOT EXISTS idx_whatsapp_conn_user_id ON public.whatsapp_connections(user_id);
 CREATE INDEX IF NOT EXISTS idx_whatsapp_conn_phone_number_id ON public.whatsapp_connections(phone_number_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_conn_unique_active_phone
+CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_conn_unique_active_or_pending_phone
   ON public.whatsapp_connections(phone_number_id)
-  WHERE status = 'active';
+  WHERE status IN ('active', 'pending_verification');
 CREATE INDEX IF NOT EXISTS idx_mensagens_whatsapp_user_lida ON public.mensagens_whatsapp(user_id, lida);
 CREATE INDEX IF NOT EXISTS idx_mensagens_whatsapp_user_created ON public.mensagens_whatsapp(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mensagens_whatsapp_cliente_telefone ON public.mensagens_whatsapp(cliente_telefone);
@@ -846,34 +846,64 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
-  -- REGRA 2 (PARTE 3): Proteção contra conflito / sequestro entre usuários
-  IF NEW.status = 'active' THEN
+  -- REGRA 2: Proteções aplicadas a conexões 'active' E 'pending_verification'
+  IF NEW.status IN ('active', 'pending_verification') THEN
+    -- 2a. Unicidade contra conflito / sequestro entre usuários (ativos ou pendentes)
     IF EXISTS (
       SELECT 1 FROM public.whatsapp_connections
       WHERE phone_number_id = NEW.phone_number_id
-        AND status = 'active'
+        AND status IN ('active', 'pending_verification')
         AND user_id <> NEW.user_id
         AND id <> COALESCE(NEW.id, '00000000-0000-0000-0000-000000000000'::uuid)
     ) THEN
-      RAISE EXCEPTION 'PHONE_NUMBER_ALREADY_CLAIMED: Este phone_number_id já está vinculado ativamente a outro usuário.'
+      RAISE EXCEPTION 'PHONE_NUMBER_ALREADY_CLAIMED: Este phone_number_id já está vinculado (ativo ou pendente) a outro usuário.'
         USING ERRCODE = '23505';
     END IF;
 
-    -- REGRA 3: Conexões individuais ativas exigem plano TURBO
+    -- 2b. Conexões individuais (ativas ou pendentes) exigem plano TURBO
     SELECT plano INTO v_user_plano
     FROM public.profiles
     WHERE id = NEW.user_id;
 
     IF v_user_plano IS NULL OR v_user_plano <> 'TURBO' THEN
-      RAISE EXCEPTION 'UPGRADE_REQUIRED: Apenas usuários com plano TURBO podem ativar conexões comerciais individuais da Meta Cloud API.'
+      RAISE EXCEPTION 'UPGRADE_REQUIRED: Apenas usuários com plano TURBO podem cadastrar conexões comerciais individuais da Meta Cloud API.'
         USING ERRCODE = 'P0001';
     END IF;
+  END IF;
+
+  -- REGRA 3: Nenhuma transição para 'active' pode ser feita por papel comum (authenticated)
+  -- Somente o backend confiável (service_role) pode ativar conexões
+  IF NEW.status = 'active' THEN
+    DECLARE
+      v_jwt_role TEXT;
+      v_auth_role TEXT;
+      v_is_service_role BOOLEAN;
+    BEGIN
+      v_jwt_role := coalesce(current_setting('request.jwt.claim.role', true), '');
+      
+      BEGIN
+        v_auth_role := auth.role();
+      EXCEPTION WHEN OTHERS THEN
+        v_auth_role := NULL;
+      END;
+
+      v_is_service_role := (
+        v_jwt_role = 'service_role' 
+        OR v_auth_role = 'service_role'
+        OR session_user = 'service_role'
+      );
+
+      IF v_jwt_role = 'authenticated' OR v_auth_role = 'authenticated' OR NOT v_is_service_role THEN
+        RAISE EXCEPTION 'FORBIDDEN_ACTIVATION: Apenas o backend confiável (service_role) pode ativar conexões individuais após verificação oficial com a Meta.'
+          USING ERRCODE = '42501';
+      END IF;
+    END;
   END IF;
 
   NEW.updated_at := NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth, pg_temp;
 
 DROP TRIGGER IF EXISTS trg_check_whatsapp_connection_security ON public.whatsapp_connections;
 CREATE TRIGGER trg_check_whatsapp_connection_security
@@ -905,7 +935,7 @@ BEGIN
   UPDATE public.whatsapp_connections
   SET status = 'inactive',
       updated_at = NOW()
-  WHERE user_id = v_uid AND status = 'active';
+  WHERE user_id = v_uid AND status IN ('active', 'pending_verification');
 
   INSERT INTO public.whatsapp_connections (
     user_id,
@@ -921,7 +951,7 @@ BEGIN
     trim(p_waba_id),
     trim(p_phone_number_id),
     trim(p_display_phone_number),
-    'active',
+    'pending_verification',
     NOW(),
     NOW()
   )
@@ -931,10 +961,10 @@ BEGIN
     'success', true,
     'id', v_new_id,
     'phone_number_id', trim(p_phone_number_id),
-    'status', 'active'
+    'status', 'pending_verification'
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth, pg_temp;
 
 REVOKE ALL ON FUNCTION public.register_whatsapp_connection(TEXT, TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.register_whatsapp_connection(TEXT, TEXT, TEXT) TO authenticated, service_role;

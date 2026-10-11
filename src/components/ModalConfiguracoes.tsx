@@ -23,6 +23,7 @@ import {
   ExternalLink,
   Mail,
   LifeBuoy,
+  Clock,
 } from 'lucide-react';
 import { ConfiguracaoEmpresa, WhatsAppConnection } from '../types';
 import { testarConexaoGemini, GeminiStatusResult } from '../utils/ai';
@@ -348,6 +349,8 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
               <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
                 waConn?.status === 'active'
                   ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                  : waConn?.status === 'pending_verification'
+                  ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700'
                   : waConn?.status === 'revoked'
                   ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-700'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700'
@@ -356,6 +359,8 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
                   ? 'Verificando...'
                   : waConn?.status === 'active'
                   ? '🟢 Conexão Ativa'
+                  : waConn?.status === 'pending_verification'
+                  ? '🟡 Verificação Pendente'
                   : waConn?.status === 'revoked'
                   ? '🔴 Conexão Revogada'
                   : '⚪ Desconectado'}
@@ -363,7 +368,66 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
             </div>
 
             {/* Status e Detalhes da Conexão */}
-            {waConn && waConn.status === 'active' ? (
+            {waConn && waConn.status === 'pending_verification' ? (
+              <div className="bg-amber-50/70 dark:bg-amber-950/30 p-3.5 rounded-xl border border-amber-300 dark:border-amber-800/80 space-y-3 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 mt-0.5">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div className="space-y-1 min-w-0">
+                    <div className="font-bold text-amber-950 dark:text-amber-200">
+                      Identificadores Registrados • Verificação Pendente
+                    </div>
+                    <p className="text-[11px] text-amber-900/90 dark:text-amber-300/90 leading-relaxed">
+                      A conexão individual ainda <strong>não está disponível para envio</strong> até a integração oficial autorizada com a Meta ser implementada. Seus envios e atendimentos continuam operando normalmente via <strong>Canal Central CLOSI</strong> e link direto WhatsApp.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-amber-200 dark:border-amber-900/50 space-y-1.5 text-[11px]">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-600 dark:text-slate-400">Número de Exibição:</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                      {waConn.displayPhoneNumber || 'Não informado'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-600 dark:text-slate-400">Phone Number ID:</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300">
+                      {waConn.phoneNumberId}
+                    </span>
+                  </div>
+                  {waConn.wabaId && (
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-slate-600 dark:text-slate-400">WABA ID:</span>
+                      <span className="font-mono text-slate-700 dark:text-slate-300">
+                        {waConn.wabaId}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-amber-200/60 dark:border-amber-900/40">
+                  <button
+                    type="button"
+                    onClick={() => setShowConnForm(!showConnForm)}
+                    className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 hover:underline cursor-pointer"
+                  >
+                    {showConnForm ? 'Fechar Edição' : 'Editar Identificadores'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDisconnect}
+                    disabled={savingConn}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 cursor-pointer disabled:opacity-50"
+                  >
+                    <Unlink className="w-3 h-3" />
+                    <span>Remover Conexão</span>
+                  </button>
+                </div>
+              </div>
+            ) : waConn && waConn.status === 'active' ? (
               <div className="bg-white dark:bg-slate-900/90 p-3 rounded-lg border border-emerald-200/80 dark:border-slate-700 space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-slate-600 dark:text-slate-400">Número Comercial:</span>
@@ -424,7 +488,7 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
             ) : (
               <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
                 <p className="text-slate-600 dark:text-slate-300 text-[11px]">
-                  Conecte seu <strong>Phone Number ID</strong> da Meta para habilitar recebimento em tempo real e follow-up oficial via Cloud API.
+                  Cadastre seu <strong>Phone Number ID</strong> da Meta para preparar sua conta comercial. O envio direto por número próprio aguarda liberação da integração oficial com a Meta.
                 </p>
                 {!showConnForm && (
                   <button
@@ -433,7 +497,7 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-colors"
                   >
                     <Link2 className="w-3.5 h-3.5" />
-                    <span>Conectar Número Comercial</span>
+                    <span>Configurar Número Comercial</span>
                   </button>
                 )}
               </div>

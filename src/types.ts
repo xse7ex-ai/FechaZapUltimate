@@ -137,7 +137,7 @@ export interface WhatsAppConnection {
   wabaId?: string;
   phoneNumberId: string;
   displayPhoneNumber?: string;
-  status: 'active' | 'inactive' | 'revoked';
+  status: 'active' | 'inactive' | 'revoked' | 'pending_verification';
   createdAt?: string;
   updatedAt?: string;
 }

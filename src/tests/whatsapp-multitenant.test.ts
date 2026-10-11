@@ -31,7 +31,8 @@ interface MockConnection {
   id: string;
   userId: string;
   phoneNumberId: string;
-  status: 'active' | 'inactive' | 'revoked';
+  wabaId?: string;
+  status: 'active' | 'inactive' | 'revoked' | 'pending_verification';
 }
 
 interface MockMessage {
@@ -88,23 +89,38 @@ class MockWhatsAppWebhookService {
       throw new Error('FORBIDDEN_CENTRAL_WABA: O WABA ID central do FechaZap não pode ser cadastrado como conexão individual.');
     }
     const alreadyClaimed = this.connections.some(
-      (c) => c.phoneNumberId === phoneNumberId && c.status === 'active' && c.userId !== userId
+      (c) => c.phoneNumberId === phoneNumberId && (c.status === 'active' || c.status === 'pending_verification') && c.userId !== userId
     );
     if (alreadyClaimed) {
-      throw new Error('PHONE_NUMBER_ALREADY_CLAIMED: Este phone_number_id já está vinculado ativamente a outro usuário.');
+      throw new Error('PHONE_NUMBER_ALREADY_CLAIMED: Este phone_number_id já está vinculado (ativo ou pendente) a outro usuário.');
     }
     if (plano !== 'TURBO') {
-      throw new Error('UPGRADE_REQUIRED: Apenas usuários com plano TURBO podem ativar conexões comerciais individuais da Meta Cloud API.');
+      throw new Error('UPGRADE_REQUIRED: Apenas usuários com plano TURBO podem cadastrar conexões comerciais individuais da Meta Cloud API.');
     }
     this.connections = this.connections.filter((c) => c.userId !== userId);
-    this.connections.push({
+    const conn: MockConnection = {
       id: `conn-${Date.now()}`,
       userId,
       phoneNumberId,
       wabaId,
-      status: 'active',
-    });
+      status: 'pending_verification',
+    };
+    this.connections.push(conn);
+    return { success: true, status: 'pending_verification', connection: conn };
+  }
+
+  activateConnection(phoneNumberId: string, role: string = 'service_role') {
+    if (role !== 'service_role') {
+      throw new Error('FORBIDDEN_ACTIVATION: Apenas o backend confiável (service_role) pode ativar conexões individuais após verificação oficial com a Meta.');
+    }
+    const conn = this.connections.find((c) => c.phoneNumberId === phoneNumberId);
+    if (!conn) throw new Error('CONNECTION_NOT_FOUND');
+    conn.status = 'active';
     return { success: true };
+  }
+
+  getConnection(phoneNumberId: string): MockConnection | undefined {
+    return this.connections.find((c) => c.phoneNumberId === phoneNumberId);
   }
 
   addClient(client: MockClient) {
@@ -1112,7 +1128,11 @@ describe('WhatsApp Cloud API Multi-Tenant - Validações da Fase 5/9', () => {
       const phoneA = 'phone-comercial-empresa-a-777';
       const clienteDoA = '5511988887777';
 
+      // Cria conexão que nasce pendente
       webService.registerConnection(userA, phoneA, 'TURBO');
+      // Ativação confiável pelo backend simulando verificação oficial Meta
+      webService.activateConnection(phoneA, 'service_role');
+
       webService.addClient({
         id: 'cli-a-1',
         userId: userA,
@@ -1166,6 +1186,103 @@ describe('WhatsApp Cloud API Multi-Tenant - Validações da Fase 5/9', () => {
       expect(() => {
         webService.registerConnection('user-pro-1', 'phone-novo-123', 'PRO');
       }).toThrow('UPGRADE_REQUIRED');
+    });
+
+    it('20. Estado Pendente: Nova conexão é criada SEMPRE como pending_verification', () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      const res = webService.registerConnection('user-turbo-1', 'phone-pending-check', 'TURBO');
+      expect(res.success).toBe(true);
+      expect(res.status).toBe('pending_verification');
+
+      const conn = webService.getConnection('phone-pending-check');
+      expect(conn).toBeDefined();
+      expect(conn?.status).toBe('pending_verification');
+    });
+
+    it('21. Segurança de Papel: Papel authenticated tentando ativar conexão diretamente é rejeitado com FORBIDDEN_ACTIVATION', () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      webService.registerConnection('user-turbo-1', 'phone-auth-hack', 'TURBO');
+
+      expect(() => {
+        webService.activateConnection('phone-auth-hack', 'authenticated');
+      }).toThrow('FORBIDDEN_ACTIVATION');
+    });
+
+    it('22. Roteamento Inbound: Conexão pending_verification NUNCA intercepta inbound individual', async () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      const userUnverified = 'user-unverified-1';
+      const phoneUnverified = 'phone-not-yet-verified-555';
+      const clienteX = '5511977776666';
+
+      // Conexão permanece pending_verification
+      webService.registerConnection(userUnverified, phoneUnverified, 'TURBO');
+      webService.addClient({
+        id: 'cli-x',
+        userId: userUnverified,
+        telefone: clienteX,
+        whatsappOptIn: true,
+      });
+
+      const payload = {
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            changes: [
+              {
+                field: 'messages',
+                value: {
+                  metadata: { phone_number_id: phoneUnverified },
+                  messages: [
+                    {
+                      id: 'wamid_should_be_ignored',
+                      from: clienteX,
+                      type: 'text',
+                      text: { body: 'Mensagem para número não verificado' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const raw = JSON.stringify(payload);
+      const sig = `sha256=${createHmac('sha256', SECRET).update(raw).digest('hex')}`;
+      const res = await webService.processWebhook(raw, sig);
+
+      expect(res.status).toBe(200);
+      expect(res.processed).toBe(0); // Não processa porque status não é active!
+      expect(webService.getMessagesForUser(userUnverified).length).toBe(0);
+    });
+
+    it('23. Roteamento Outbound: Usuário com conexão pending_verification usa o canal central autorizado', async () => {
+      const service = new MockWhatsAppFollowupService(CENTRAL_ID);
+      service.addConnection({
+        id: 'conn-pending-1',
+        userId: 'user-com-conexao-pendente',
+        phoneNumberId: 'phone-pendente-999',
+        status: 'pending_verification',
+      });
+
+      const res = await service.triggerFollowup({
+        userId: 'user-com-conexao-pendente',
+        clienteTelefone: '5511999990002',
+        orcamentoId: 'orc-pending-followup',
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.mode).toBe('central'); // Cai obrigatoriamente no canal central
+      expect(res.effectivePhoneId).toBe(CENTRAL_ID);
+    });
+
+    it('24. Unicidade Conflitante: Reivindicação de número já pendente por outro usuário é rejeitada', () => {
+      const webService = new MockWhatsAppWebhookService(SECRET, CENTRAL_ID);
+      webService.registerConnection('user-a', 'phone-duplicado-123', 'TURBO');
+
+      expect(() => {
+        webService.registerConnection('user-b', 'phone-duplicado-123', 'TURBO');
+      }).toThrow('PHONE_NUMBER_ALREADY_CLAIMED');
     });
   });
 });

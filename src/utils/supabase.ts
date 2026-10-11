@@ -401,7 +401,7 @@ export async function fetchWhatsAppConnection(userId?: string | null): Promise<i
       wabaId: data.waba_id || undefined,
       phoneNumberId: data.phone_number_id,
       displayPhoneNumber: data.display_phone_number || undefined,
-      status: data.status || 'active',
+      status: (data.status as any) || 'pending_verification',
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };
@@ -437,7 +437,7 @@ export async function saveWhatsAppConnection(params: {
   ) {
     return {
       success: false,
-      error: 'O identificador central do Fecha CRM não pode ser cadastrado como conexão individual.',
+      error: 'O identificador central do CLOSI não pode ser cadastrado como conexão individual.',
     };
   }
 
@@ -449,7 +449,7 @@ export async function saveWhatsAppConnection(params: {
       wabaId: params.wabaId,
       phoneNumberId: cleanPhoneId,
       displayPhoneNumber: params.displayPhoneNumber,
-      status: 'active',
+      status: 'pending_verification',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -506,7 +506,7 @@ export async function disconnectWhatsAppConnection(): Promise<{ success: boolean
       .from('whatsapp_connections')
       .update({ status: 'inactive', updated_at: new Date().toISOString() })
       .eq('user_id', authData.user.id)
-      .eq('status', 'active');
+      .in('status', ['active', 'pending_verification']);
 
     localStorage.removeItem(`fechazap_wa_conn_${authData.user.id}`);
     if (error) return { success: false, error: error.message };

@@ -19,6 +19,7 @@
         "vite": "^8.3.0",
       },
       "devDependencies": {
+        "@electric-sql/pglite": "^0.5.8",
         "@types/canvas-confetti": "^1.9.0",
         "@types/node": "22.19.21",
         "@types/react": "^19.3.0",
@@ -31,6 +32,8 @@
   },
   "packages": {
     "@babel/runtime": ["@babel/runtime@7.29.7", "", {}, ""],
+
+    "@electric-sql/pglite": ["@electric-sql/pglite@0.5.8", "", {}, "sha512-n9tsbUOhwx2epK1V0ZG9Ar4SHWUju04dhmzZXiSBXwBoleOvIfals33NAaWgagQVAL4Rbvx/Ptsu3P+pA09f6Q=="],
 
     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0", "@jridgewell/trace-mapping": "^0.3.24" } }, ""],
 
