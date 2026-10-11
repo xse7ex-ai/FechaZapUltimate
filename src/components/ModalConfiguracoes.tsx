@@ -746,7 +746,7 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
             </p>
 
             <a
-              href="mailto:fechazap.suporte@gmail.com"
+              href="mailto:closi.support@gmail.com"
               className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/80 hover:border-emerald-400 dark:hover:border-emerald-600 text-slate-800 dark:text-slate-100 shadow-xs hover:shadow-md transition-all group cursor-pointer"
             >
               <div className="flex items-center gap-2.5 min-w-0">
@@ -755,7 +755,7 @@ export const ModalConfiguracoes: React.FC<ModalConfiguracoesProps> = ({
                 </div>
                 <div className="truncate">
                   <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">E-mail de Suporte</p>
-                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate">fechazap.suporte@gmail.com</p>
+                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate">closi.support@gmail.com</p>
                 </div>
               </div>
               <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500 shrink-0 ml-2" />

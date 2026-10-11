@@ -201,9 +201,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         <a
-          href="mailto:fechazap.suporte@gmail.com"
+          href="mailto:closi.support@gmail.com"
           className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors group cursor-pointer"
-          title="Enviar e-mail para fechazap.suporte@gmail.com"
+          title="Enviar e-mail para closi.support@gmail.com"
         >
           <div className="flex items-center gap-3">
             <Mail className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />

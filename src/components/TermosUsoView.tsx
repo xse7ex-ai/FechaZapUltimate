@@ -137,7 +137,9 @@ export const TermosUsoView: React.FC<TermosUsoViewProps> = ({
             </p>
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center gap-3">
               <Mail className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-xs font-semibold">fechazap.suporte@gmail.com</span>
+              <a href="mailto:closi.support@gmail.com" className="text-xs font-semibold hover:underline">
+                closi.support@gmail.com
+              </a>
             </div>
           </section>
 

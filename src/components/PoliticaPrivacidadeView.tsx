@@ -100,13 +100,13 @@ export const PoliticaPrivacidadeView: React.FC<PoliticaPrivacidadeViewProps> = (
           <section className="space-y-2.5">
             <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              1. Quem Somos e Objetivo da Plataforma
+              1. QUEM SOMOS E ESCOPO DO SERVIÇO
             </h2>
             <p>
-              O <strong>CLOSI</strong> é uma solução tecnológica voltada para profissionais autônomos, prestadores de serviços e pequenas empresas para a gestão de orçamentos, organização de clientes e comunicação comercial transparente via WhatsApp.
-            </p>
-            <p>
-              Nossa missão é fornecer ferramentas de CRM eficientes que permitam aos prestadores organizar propostas solicitadas pelos seus próprios clientes de maneira ética, rápida e em total conformidade com as diretrizes da Meta e a legislação brasileira de proteção de dados.
+              O <strong>CLOSI</strong> é uma plataforma de gestão de orçamentos, CRM e comunicação com clientes para profissionais autônomos e empresas. O CLOSI é oferecido a usuários no Brasil e internacionalmente, e o tratamento de dados segue a legislação aplicável ao país do usuário/cliente final, incluindo a LGPD (Brasil) e o GDPR (usuários na União Europeia/EEE), entre outras leis locais de proteção de dados quando aplicável. Contato para suporte e privacidade:{' '}
+              <a href="mailto:closi.support@gmail.com" className="text-emerald-600 dark:text-emerald-400 hover:underline">
+                closi.support@gmail.com
+              </a>.
             </p>
           </section>
 
@@ -185,7 +185,10 @@ export const PoliticaPrivacidadeView: React.FC<PoliticaPrivacidadeViewProps> = (
             </p>
             <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs sm:text-sm space-y-1.5">
               <p>
-                <strong>Como revogar:</strong> O cliente final pode simplesmente responder à conversa no WhatsApp com qualquer um dos termos: <code>PARAR</code>, <code>CANCELAR</code> ou <code>SAIR</code>, ou solicitar a interrupção diretamente ao prestador de serviços ou pelo nosso canal de suporte.
+                <strong>Como revogar:</strong> O cliente final pode simplesmente responder à conversa no WhatsApp com qualquer um dos termos: <code>PARAR</code>, <code>CANCELAR</code> ou <code>SAIR</code>, ou solicitar a interrupção diretamente ao prestador de serviços ou pelo e-mail{' '}
+                <a href="mailto:closi.support@gmail.com" className="text-emerald-600 dark:text-emerald-400 hover:underline">
+                  closi.support@gmail.com
+                </a>.
               </p>
               <p className="text-slate-500 dark:text-slate-400">
                 Uma vez registrado o opt-out, o número de telefone é imediatamente desautorizado para novos envios automáticos no sistema.
@@ -197,31 +200,17 @@ export const PoliticaPrivacidadeView: React.FC<PoliticaPrivacidadeViewProps> = (
           <section className="space-y-2.5">
             <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              6. Direitos do Titular de Dados (LGPD)
+              6. SEUS DIREITOS DE PROTEÇÃO DE DADOS (LGPD E GDPR)
             </h2>
             <p>
-              Nos termos do artigo 18 da Lei Geral de Proteção de Dados (LGPD), o titular de dados pessoais pode exercer, a qualquer tempo, os seguintes direitos perante o CLOSI:
+              Nos termos do art. 18 da Lei Geral de Proteção de Dados (LGPD), você pode a qualquer momento solicitar: confirmação de tratamento, acesso, correção, anonimização, portabilidade, eliminação e revogação do consentimento através do e-mail{' '}
+              <a href="mailto:closi.support@gmail.com" className="text-emerald-600 dark:text-emerald-400 hover:underline">
+                closi.support@gmail.com
+              </a>.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <div className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
-                ✓ Confirmação da existência de tratamento
-              </div>
-              <div className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
-                ✓ Acesso aos dados pessoais mantidos
-              </div>
-              <div className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
-                ✓ Correção de dados incompletos ou inexatos
-              </div>
-              <div className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
-                ✓ Eliminação ou anonimização de dados desnecessários
-              </div>
-              <div className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
-                ✓ Portabilidade dos dados em formato estruturado
-              </div>
-              <div className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
-                ✓ Revogação expressa do consentimento
-              </div>
-            </div>
+            <p>
+              Usuários sob o escopo do GDPR (residentes na UE/EEE) têm os direitos equivalentes de: acesso, retificação, apagamento ("direito ao esquecimento"), limitação do tratamento, portabilidade de dados, oposição ao tratamento, e o direito de apresentar reclamação à autoridade de proteção de dados do seu país. A base legal de tratamento utilizada pelo CLOSI é primordialmente o consentimento do titular, conforme art. 6(1)(a) do GDPR / art. 7 da LGPD, além do cumprimento de obrigações legais e execução de medidas preliminares ou contratuais a pedido do titular.
+            </p>
           </section>
 
           {/* Seção 7 */}
@@ -251,10 +240,10 @@ export const PoliticaPrivacidadeView: React.FC<PoliticaPrivacidadeViewProps> = (
               <div>
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Canal de Privacidade e DPO</p>
                 <a
-                  href="mailto:fechazap.suporte@gmail.com"
+                  href="mailto:closi.support@gmail.com"
                   className="text-sm font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
                 >
-                  fechazap.suporte@gmail.com
+                  closi.support@gmail.com
                 </a>
               </div>
             </div>
